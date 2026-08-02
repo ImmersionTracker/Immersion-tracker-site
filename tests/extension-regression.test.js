@@ -18,7 +18,7 @@ function values(source, expression) {
 }
 
 function testManifestAndMessageContracts() {
-  assert.equal(manifest.version, "1.9.2", "release version changed unexpectedly");
+  assert.equal(manifest.version, "1.9.3", "release version changed unexpectedly");
   assert(manifest.permissions.includes("unlimitedStorage"), "long-term local history needs unlimited storage");
   assert(background.includes('setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })'),
     "local and synced tracker data should not be directly exposed to content scripts");
@@ -225,7 +225,7 @@ async function testStorageWriteFailureRecovery() {
   const start = background.indexOf("function updateState");
   const end = background.indexOf("dataReady = initializeCanonicalData", start);
   let writes = 0;
-  const factory = new Function("readState", "writeState", "compactOldHistory", "TrackerEntitlements", "TrackerData", "enqueuePendingCloudSnapshots", `
+  const factory = new Function("readState", "writeState", "compactOldHistory", "TrackerEntitlements", "TrackerData", "enqueuePendingCloudSnapshots", "enqueuePendingAnalyticsEvents", `
     let stateQueue = Promise.resolve();
     let dashboardCache = { at: 0, languageCode: "", records: null };
     let lastStorageWriteError = null;
@@ -237,7 +237,8 @@ async function testStorageWriteFailureRecovery() {
     () => null,
     { normalize: (value) => value || {} },
     { reconcile: () => ({ ok: true, differences: [] }) },
-    async () => null
+    async () => null,
+    () => null
   );
   const failed = await factory.updateState((state) => { state.value = 1; return { ok: true }; });
   assert.equal(failed.reason, "storage-write-failed");
@@ -385,7 +386,7 @@ function testOnboardingPlansAndLanguageSafety() {
     content.includes("Choose a target language in the extension before tracking"),
     "choosing later must keep automatic tracking inactive until configured");
   assert(popupHtml.includes('id="openAccountInfo"') && popupHtml.includes('id="accountInfoDialog"') &&
-    popupHtml.includes("No login is required in this version") &&
+    popupHtml.includes("Signing in is optional and never required") &&
     dashboardHtml.includes('id="dashboardProfile"') && dashboardHtml.includes("Local beta profile"),
     "the local account/plan status should be discoverable in both extension surfaces");
   assert(popupHtml.includes("Pro Analytics is unlocked for everyone during beta") &&

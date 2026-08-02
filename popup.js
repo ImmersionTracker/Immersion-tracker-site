@@ -692,6 +692,7 @@ async function render() {
 
   if (!settingsInitialized) {
     document.getElementById("fullyManualEnabled").checked = state.preferences?.fullyManualEnabled === true;
+    document.getElementById("analyticsConsent").checked = state.preferences?.analyticsConsent === true;
     document.getElementById("autoMinimizeEnabled").checked = state.preferences?.autoMinimizeEnabled !== false;
     document.getElementById("autoMinimizeSeconds").value = state.preferences?.autoMinimizeSeconds || 5;
     settingsInitialized = true;
@@ -1306,6 +1307,25 @@ document.getElementById("saveTrackingSettings").addEventListener("click", async 
   status.textContent = enabled
     ? "Fully manual language mode enabled."
     : "Automatic language checks enabled.";
+});
+
+document.getElementById("saveAnalyticsSettings").addEventListener("click", async () => {
+  const enabled = document.getElementById("analyticsConsent").checked;
+  const response = await sendRuntimeMessage({
+    type: "setPreferences",
+    preferences: { analyticsConsent: enabled }
+  });
+  const status = document.getElementById("analyticsSettingsStatus");
+  if (!response?.ok) {
+    status.textContent = "Could not save the analytics preference.";
+    return;
+  }
+  if (latestDashboard?.state?.preferences) {
+    latestDashboard.state.preferences.analyticsConsent = enabled;
+  }
+  status.textContent = enabled
+    ? "Thanks - anonymous usage analytics are now on."
+    : "Anonymous usage analytics are off.";
 });
 
 document.getElementById("saveOverlaySettings").addEventListener("click", async () => {

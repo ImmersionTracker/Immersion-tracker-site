@@ -18,7 +18,7 @@ See active and passive immersion separately, choose whether goals use all immers
 
 The extension also includes reminders, JSON/CSV backup and import, optional Chrome Sync, and Light and Dark modes. It's completely free, with no ads and nothing to buy.
 
-Your tracker data stays in your browser, optional Chrome Sync, and - only if you choose to create a free account - your own Supabase-backed cloud account, protected by row-level security so nobody else can read or write it. The extension has no analytics, no ads, and nothing to buy. If you'd like to support development, an optional "Donate" link is available in the popup - it simply opens PayPal in a new tab and never shares your tracker data.
+Your tracker data stays in your browser, optional Chrome Sync, and - only if you choose to create a free account - your own Supabase-backed cloud account, protected by row-level security so nobody else can read or write it. The extension also offers optional, consent-based product analytics - off by default, controlled separately from cloud sync in Tracker Settings, and limited to your target language, platform, active/passive duration, broad content type, date, and extension version; it never includes titles, URLs, searches, subtitles, page text, manual-entry descriptions, or any account/device identifier. The extension has no ads and nothing to buy. If you'd like to support development, an optional "Donate" link is available in the popup - it simply opens PayPal in a new tab and never shares your tracker data.
 
 ## Permission justifications
 
@@ -30,7 +30,7 @@ Your tracker data stays in your browser, optional Chrome Sync, and - only if you
 - `idle`: pauses eligible tracking when the computer is idle or locked.
 - `notifications`: shows enabled goal-completion and weekly-review notifications.
 - Supported-site host permissions: reads only the playback state, title identity, and language information needed for tracking on the supported services declared in the extension package.
-- `https://*.supabase.co/*`: contacted only if the user creates an optional account and turns on cloud sync, to sign in and upload the same privacy-minimal daily totals described in `PRIVACY.md` (date, language, general source, active/passive seconds, session count - never titles or URLs) to that user's own row-level-secured account. Never contacted if the user does not sign in.
+- `https://*.supabase.co/*`: contacted if the user creates an optional account and turns on cloud sync, to sign in and upload the same privacy-minimal daily totals described in `PRIVACY.md` (date, language, general source, active/passive seconds, session count - never titles or URLs) to that user's own row-level-secured account; separately and independently, also contacted if the user turns on the optional analytics toggle in Tracker Settings, to send only the seven anonymous fields described in `PRIVACY.md`. Never contacted if the user does neither.
 
 ## Privacy-practices declarations
 
@@ -46,7 +46,7 @@ Also certify, consistently with `PRIVACY.md`, that the data:
 - is used only for the extension's single purpose and user-facing features;
 - is not sold or transferred for unrelated purposes;
 - is not used for advertising, creditworthiness, or lending;
-- is not sent to any server unless the user opts into cloud sync, in which case only privacy-minimal daily totals go to that user's own Supabase-backed account (never titles, URLs, or other user content), protected by row-level security; and
+- is not sent to any server unless the user opts into cloud sync (privacy-minimal daily totals go to that user's own Supabase-backed account, protected by row-level security) or opts into analytics (anonymous, unidentifiable usage events limited to the seven fields in `PRIVACY.md`) - never titles, URLs, or other user content in either case; and
 - is not made available for humans to read except with specific user consent for support or when required for law or security.
 
 Host `PRIVACY.md` at a stable public HTTPS URL and place that URL in the Developer Dashboard privacy-policy field before submission.
@@ -59,7 +59,7 @@ Host `PRIVACY.md` at a stable public HTTPS URL and place that URL in the Develop
 4. Verify that foreground playback records active time and background audible playback records passive time.
 5. Open a supported streaming-service playback page. Explain that logged-in subscription content may be required and that the extension asks for confirmation when it cannot identify the spoken language.
 6. Open the popup's Manual tab to test the persistent timer and a completed entry.
-7. Use Tracker Settings to test Fully manual counting, the goal contribution/detail choices, Light and Dark modes, notifications, backups, Chrome Sync, and the tutorial.
+7. Use Tracker Settings to test Fully manual counting, the analytics consent toggle (confirm it is off by default and independent of cloud sync), the goal contribution/detail choices, Light and Dark modes, notifications, backups, Chrome Sync, and the tutorial.
 8. Open Account & Plan and optionally create a free account to confirm sign-in and cloud sync are optional, clearly labelled, and never required for local tracking.
 
 ## Publisher checklist
@@ -67,7 +67,7 @@ Host `PRIVACY.md` at a stable public HTTPS URL and place that URL in the Develop
 - Register the dedicated publisher Google account and enable two-step verification.
 - Choose a publisher name and verify a frequently monitored contact email.
 - Declare Trader or Non-Trader accurately; EU trader information may be displayed publicly.
-- Upload `release/Language-Immersion-Tracker-1.9.2.zip` (cloud-enabled build: Supabase host permission and production `config/cloud-config.json` included - see `release/RELEASE_CHECKLIST.md`).
+- Upload `release/Language-Immersion-Tracker-1.9.3.zip` (cloud- and analytics-enabled build: Supabase host permission and production `config/cloud-config.json` included - see `release/RELEASE_CHECKLIST.md`).
 - Do not include a manifest `key` in the Chrome Web Store package. Chrome Web Store assigns and maintains the published extension ID.
 - Provide at least one real 1280x800 or 640x400 product screenshot and a 440x280 promotional image.
 - Complete the Store listing, Privacy practices, Distribution, and Test instructions tabs.

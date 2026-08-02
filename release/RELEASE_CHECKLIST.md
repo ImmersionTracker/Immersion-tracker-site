@@ -38,3 +38,14 @@ Completed 2026-08-03 against the production Supabase project (`khfizbjmhevmxwtne
 - Confirmed only daily aggregate rows (date, language, source, active/passive seconds, session count) reach the database - no titles, URLs, or other content.
 
 Re-run this verification against the production project if the schema, RLS policies, or upload/reset code paths change.
+
+## Analytics release verification
+
+Completed 2026-08-03 against the production Supabase project (`khfizbjmhevmxwtnekvb`), before analytics was first enabled in a shipped package:
+
+- `supabase/migrations/0002_analytics_events.sql` was deployed to production: confirmed the `analytics_events` table exists in the `public` schema with RLS enabled, and that Database > Policies lists exactly one policy (`analytics_events_insert_anon`, `INSERT`, applied to `anon, authenticated`) with no select/update/delete policy for any role - so no role can read a row back, including the one that inserted it.
+- Confirmed live that the anon role can insert a row shaped exactly like `lib/analytics-contract.js`'s `toDatabaseRow()` output: three rows inserted during this verification matched the seven-column contract exactly (`target_language`, `platform`, `content_type`, `active_seconds`, `passive_seconds`, `event_date`, `extension_version`) with no extra fields.
+- All three verification rows were deleted from the production table afterward; `select count(*) from analytics_events` returned 0 before this release shipped.
+- Confirmed only the seven allowlisted columns exist on the table - no titles, URLs, or other content, and no user/device/session identifier of any kind.
+
+Re-run this verification against the production project if the schema, RLS policies, or upload code paths change.

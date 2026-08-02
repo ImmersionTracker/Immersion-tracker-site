@@ -1,8 +1,15 @@
-# Language Immersion Tracker - version 1.9.2
+# Language Immersion Tracker - version 1.9.3
 
 A Chrome Manifest V3 extension for tracking active and passive immersion in any target language. It detects supported video playback on YouTube and major streaming services, provides a persistent manual timer for any source, tracks goals, and keeps each language's totals and remembered video decisions separate.
 
-The extension is completely free. It now includes an optional Supabase account and cloud-sync path - sign-in UI, an upload queue, a three-month free sync trial - in `lib/account-state.js`, `lib/supabase-auth.js`, `lib/supabase-rest.js`, `lib/cloud-contract.js`, `background.js`, and `supabase/`. Signing in is never required: local tracking, goals, history, and exports work fully without an account and are unaffected if an account is never created, is signed out of, or its free sync trial ends - only the cloud mirror stops updating. The RLS checklist in `supabase/tests/rls-checklist.md` has been run live against the production Supabase project with two real accounts (see `release/RELEASE_CHECKLIST.md`), so this release ships with the `https://*.supabase.co/*` host permission and cloud sign-in enabled. See `PRIVACY.md` for exactly what cloud sync does and does not send.
+The extension is completely free. It includes an optional Supabase account and cloud-sync path - sign-in UI, an upload queue, a three-month free sync trial - in `lib/account-state.js`, `lib/supabase-auth.js`, `lib/supabase-rest.js`, `lib/cloud-contract.js`, `background.js`, and `supabase/`. Signing in is never required: local tracking, goals, history, and exports work fully without an account and are unaffected if an account is never created, is signed out of, or its free sync trial ends - only the cloud mirror stops updating. The RLS checklist in `supabase/tests/rls-checklist.md` has been run live against the production Supabase project with two real accounts (see `release/RELEASE_CHECKLIST.md`), so this release ships with the `https://*.supabase.co/*` host permission and cloud sign-in enabled. It also includes optional, consent-based product analytics (`lib/analytics-contract.js`, `lib/analytics-rest.js`, the Tracker Settings toggle in `popup.html`/`popup.js`) - off by default, independent of cloud sync, and limited to the seven fields described in `PRIVACY.md`. See `PRIVACY.md` for exactly what cloud sync and analytics do and do not send.
+
+## What changed in version 1.9.3
+
+- Added optional, consent-based product analytics: a Tracker Settings toggle (off by default), a closed-allowlist event contract (`lib/analytics-contract.js`), and a write-only `analytics_events` table (`supabase/migrations/0002_analytics_events.sql`) that grants no read/update/delete access to anyone, including the inserting client.
+- Verified the full analytics RLS checklist (`supabase/tests/analytics-rls-checklist.md`) live against the production Supabase project: the anon role can insert a correctly-shaped row and cannot read it back, the table has no select/update/delete policy for any role, and malformed or extra-column inserts are rejected by the table's own constraints. Three test rows inserted during that verification were deleted afterward - the table is empty before this release ships.
+- Analytics uploads are gated on the same per-user toggle as everything else in Tracker Settings and never turn on because cloud sync is on, or vice versa.
+- Updated `PRIVACY.md` to describe analytics as live rather than pending.
 
 ## What changed in version 1.9.2
 

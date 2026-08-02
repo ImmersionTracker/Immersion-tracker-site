@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Language Immersion Tracker",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Tracks any target language with automatic video detection, separate language totals, goals, manual timers, hotkeys, and Chrome Sync.",
   "permissions": [
     "storage",

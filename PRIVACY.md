@@ -49,7 +49,9 @@ Cloud data is protected by Supabase Row Level Security so that an account can on
 
 ## Optional product analytics
 
-The extension is designed to support optional, consent-based product analytics to help improve the extension - off by default, controlled separately from cloud sync, and never including titles, URLs, searches, subtitles, page text, or manual-entry descriptions. If collected, it would be limited to: target language, platform (e.g., YouTube or Netflix), active/passive duration, broad content type, date, and extension version. This policy will be updated with the details of where that data goes before the feature is turned on for any user; it is not yet enabled in this build.
+The extension includes optional, consent-based product analytics to help improve the extension. **It is off by default and stays off until turned on in Tracker Settings**, entirely independently of cloud sync - turning one on has no effect on the other. If turned on, each anonymous event contains only: target language, platform (e.g., YouTube or Netflix), active/passive duration, broad content type, date, and extension version. It never includes titles, URLs, searches, subtitles, page text, or manual-entry descriptions, and it never includes an account id, a device id, or any other identifier - an analytics event cannot be linked to a person, a device, or to other events from the same install.
+
+If turned on, events are sent to a dedicated table in the same Supabase project used for cloud sync, using only the public anon key. That table accepts inserts only - it grants no read, update, or delete access to anyone, including a signed-in user's own client, so the extension itself has no way to read analytics data back.
 
 ## Data control and retention
 

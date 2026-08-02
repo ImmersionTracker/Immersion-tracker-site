@@ -1,7 +1,7 @@
 importScripts(
   "lib/tracker-data.js", "lib/tracker-analytics.js", "lib/entitlements.js",
   "lib/cloud-config.js", "lib/cloud-contract.js", "lib/account-state.js", "lib/supabase-auth.js",
-  "lib/supabase-rest.js"
+  "lib/supabase-rest.js", "lib/analytics-contract.js", "lib/analytics-rest.js"
 );
 
 const LOCAL_STATE_KEY = "japaneseImmersionTrackerState";
@@ -127,6 +127,7 @@ const emptyState = () => ({
     historyLimit: 5,
     notificationsEnabled: true,
     fullyManualEnabled: false,
+    analyticsConsent: false,
     goalCountingMode: "both",
     goalDisplayMode: "both",
     theme: "dark",
@@ -164,6 +165,10 @@ const emptyState = () => ({
   // ACCOUNT_SESSION_KEY, outside this exportable state entirely). Shape
   // matches TrackerCloudContract.createCloudState() plus the trial fields.
   cloud: { ...TrackerCloudContract.createCloudState({}), trialStartedAt: 0, trialExpiresAt: 0 },
+  // Optional, consent-based analytics bookkeeping - entirely separate from
+  // `cloud` above and gated by its own preferences.analyticsConsent toggle,
+  // never by whether the user is signed in or has cloud sync on.
+  analytics: TrackerAnalyticsContract.createAnalyticsState({}),
   dataModel: {
     schemaVersion: TrackerData.SCHEMA_VERSION,
     source: "canonical-daily-totals"
@@ -363,6 +368,7 @@ function normalizeState(stored, options = {}) {
       historyLimit: Number(stored.preferences?.historyLimit) === 10 ? 10 : 5,
       notificationsEnabled: stored.preferences?.notificationsEnabled !== false,
       fullyManualEnabled: stored.preferences?.fullyManualEnabled === true,
+      analyticsConsent: stored.preferences?.analyticsConsent === true,
       goalCountingMode: normalizeGoalCountingMode(stored.preferences?.goalCountingMode),
       goalDisplayMode: normalizeGoalDisplayMode(stored.preferences?.goalDisplayMode),
       theme: stored.preferences?.theme === "light" ? "light" : "dark",
@@ -415,6 +421,7 @@ function normalizeState(stored, options = {}) {
       trialStartedAt: Number(stored.cloud?.trialStartedAt) || 0,
       trialExpiresAt: Number(stored.cloud?.trialExpiresAt) || 0
     },
+    analytics: TrackerAnalyticsContract.createAnalyticsState(stored.analytics),
     entitlements: TrackerEntitlements.normalize(stored.entitlements)
   };
   if (!options.skipCanonical) {
@@ -514,6 +521,7 @@ function updateState(mutator) {
     state.entitlements = TrackerEntitlements.normalize(state.entitlements);
     const reconciliation = TrackerData.reconcile(state);
     if (reconciliation.ok) await enqueuePendingCloudSnapshots(state);
+    if (reconciliation.ok) enqueuePendingAnalyticsEvents(state);
     if (!reconciliation.ok) {
       console.error("Canonical daily totals divergence", reconciliation.differences.slice(0, 10));
       lastStorageWriteError = {
@@ -1476,6 +1484,84 @@ async function enqueuePendingCloudSnapshots(state) {
   scheduleUploadDrain();
 }
 
+// Purely local bookkeeping: compares the canonical daily records against
+// what analytics has already reported and queues only the buckets whose
+// totals moved. Never touches the network itself - scheduleAnalyticsDrain()
+// does that, separately and on its own timer, so this stays cheap enough to
+// call on every state update the way enqueuePendingCloudSnapshots does.
+function enqueuePendingAnalyticsEvents(state) {
+  if (state.preferences.analyticsConsent !== true) return;
+  const manifestVersion = chrome.runtime.getManifest().version;
+  const planned = TrackerAnalyticsContract.planEvents(state.dailyRecords, state.analytics.reported, {
+    extensionVersion: manifestVersion
+  });
+  if (!planned.length) return;
+  for (const { id, signature, event } of planned) {
+    state.analytics.queue[id] = { signature, payload: TrackerAnalyticsContract.toDatabaseRow(event), queuedAt: Date.now() };
+  }
+  scheduleAnalyticsDrain();
+}
+
+let analyticsDrainTimer = null;
+
+// Coalesces bursts of tracking updates into one send, and uses a longer
+// window than cloud sync's 4s: analytics has no per-item urgency, so there
+// is no reason to send more often than roughly once a minute of activity.
+function scheduleAnalyticsDrain(delayMs = 60000) {
+  if (analyticsDrainTimer) return;
+  analyticsDrainTimer = setTimeout(() => {
+    analyticsDrainTimer = null;
+    drainAnalyticsQueue().catch(() => null);
+  }, delayMs);
+}
+
+// Uploads whatever is queued, as one batch of anonymous events with no
+// user/device/session identifier attached. Never throws - if consent was
+// withdrawn or the build has no Supabase config, this silently does
+// nothing and drops the queue rather than sending anything.
+async function drainAnalyticsQueue() {
+  const state = await readState();
+  if (state.preferences.analyticsConsent !== true) {
+    if (Object.keys(state.analytics.queue).length) {
+      await updateState((latest) => { latest.analytics.queue = {}; return { ok: true }; });
+    }
+    return { ok: false, reason: "analytics-consent-off" };
+  }
+  const config = await getCloudConfig();
+  if (!config.enabled) return { ok: false, reason: "cloud-disabled" };
+
+  const entries = Object.entries(state.analytics.queue);
+  if (!entries.length) return { ok: true, uploaded: 0 };
+
+  try {
+    const request = TrackerAnalyticsRest.buildInsertEventsRequest(config, {
+      rows: entries.map(([, entry]) => entry.payload)
+    });
+    const response = await fetchJson(request);
+    if (!response.ok) throw new Error(TrackerAnalyticsRest.describeRestError(response.json, "Analytics upload failed."));
+
+    await updateState((latest) => {
+      for (const [id, entry] of entries) {
+        delete latest.analytics.queue[id];
+        latest.analytics.reported[id] = entry.signature;
+      }
+      latest.analytics.lastSendAt = Date.now();
+      latest.analytics.lastError = "";
+      return { ok: true };
+    });
+    return { ok: true, uploaded: entries.length };
+  } catch (error) {
+    // No per-item retry bookkeeping like cloud sync's queue: the next state
+    // update naturally re-queues anything still unreported, and a transient
+    // failure here just means the next scheduled drain tries again.
+    await updateState((latest) => {
+      latest.analytics.lastError = String(error?.message || "Analytics upload failed.").slice(0, 180);
+      return { ok: true };
+    });
+    return { ok: false, reason: "upload-failed" };
+  }
+}
+
 let uploadDrainTimer = null;
 
 // Coalesces bursts of state updates (e.g. a minute of active tracking ticks)
@@ -1564,6 +1650,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       if (message.preferences && "fullyManualEnabled" in message.preferences) {
         state.preferences.fullyManualEnabled = message.preferences.fullyManualEnabled === true;
+      }
+      if (message.preferences && "analyticsConsent" in message.preferences) {
+        state.preferences.analyticsConsent = message.preferences.analyticsConsent === true;
       }
       if (message.preferences && "goalCountingMode" in message.preferences) {
         const nextMode = normalizeGoalCountingMode(message.preferences.goalCountingMode);

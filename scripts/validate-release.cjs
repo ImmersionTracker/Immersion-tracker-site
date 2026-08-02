@@ -21,6 +21,7 @@ const sourceFiles = [
   "background.js", "content.js", "page-probe.js", "popup.js",
   "lib/tracker-data.js", "lib/tracker-analytics.js", "lib/entitlements.js", "lib/account-state.js",
   "lib/cloud-config.js", "lib/cloud-contract.js", "lib/supabase-auth.js", "lib/supabase-rest.js",
+  "lib/analytics-contract.js", "lib/analytics-rest.js",
   "popup.html", "store-assets/dashboard.html", "store-assets/capture.html"
 ];
 for (const file of sourceFiles) {
@@ -40,7 +41,9 @@ for (const required of [
   "TECHNICAL_FOUNDATION.md",
   "NEXT_PHASE_ROADMAP.md",
   "supabase/migrations/0001_cloud_foundation.sql",
-  "supabase/tests/rls-checklist.md"
+  "supabase/tests/rls-checklist.md",
+  "supabase/migrations/0002_analytics_events.sql",
+  "supabase/tests/analytics-rls-checklist.md"
 ]) assert(fs.existsSync(path.join(root, required)), `missing release document: ${required}`);
 
 const readme = read("README.md");
@@ -55,8 +58,10 @@ assert(privacy.includes("Row Level Security") && privacy.includes("never embeds 
 assert(manifest.host_permissions.includes("https://*.supabase.co/*"),
   "cloud sync is documented as live in PRIVACY.md but the Supabase host permission is missing from manifest.json");
 assert(privacy.includes("no advertising SDK and no payment integration"), "advertising/payment privacy disclosure changed unexpectedly");
-assert(privacy.includes("Optional product analytics") && privacy.includes("not yet enabled in this build"),
-  "analytics privacy disclosure changed unexpectedly - if analytics was just turned on, this assertion (and the policy text) must be updated deliberately, not left stale");
+assert(privacy.includes("Optional product analytics") && privacy.includes("off by default and stays off until turned on in Tracker Settings"),
+  "analytics privacy disclosure changed unexpectedly - update deliberately together with the actual consent toggle and event-shaping code if this changes");
+assert(privacy.includes("cannot be linked to a person, a device, or to other events from the same install"),
+  "analytics anonymity guarantee wording changed unexpectedly - this must stay true of the actual event payload, not just the policy text");
 
 const output = path.join(root, "store-assets", "output");
 const screenshots = [
