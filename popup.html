@@ -118,9 +118,57 @@
       <div><span>Active target languages</span><b>One at a time</b><b>Multi-language planned</b></div>
       <div><span>Local history &amp; exports</span><b>Included</b><b>Included</b></div>
       <div><span>Advanced Pro Analytics</span><b>Overview only</b><b>Beta unlocked</b></div>
-      <div><span>Account &amp; cloud database</span><b>Not available</b><b>Planned later</b></div>
+      <div><span>Account &amp; cloud sync</span><b>Optional &middot; 3-month free trial</b><b>Optional &middot; 3-month free trial</b></div>
     </div>
     <p class="plan-footnote">Switching your active language never deletes earlier language data.</p>
+
+    <section id="cloudAccountSection" class="dialog-section">
+      <h3>Cloud sync (optional)</h3>
+      <p id="cloudAccountStatus" class="secondary-text">Not signed in &middot; your local history keeps working either way.</p>
+
+      <div id="cloudSignedInView" class="hidden">
+        <p>Signed in as <strong id="cloudAccountEmail"></strong></p>
+        <p id="cloudTrialStatus" class="secondary-text"></p>
+        <button id="cloudSignOutButton" type="button">Sign out</button>
+      </div>
+
+      <div id="cloudGuestView">
+        <div class="period-selector cloud-mode-switch" role="group" aria-label="Account action">
+          <button class="period-button active" type="button" data-cloud-mode="signin">Sign in</button>
+          <button class="period-button" type="button" data-cloud-mode="signup">Create account</button>
+          <button class="period-button" type="button" data-cloud-mode="forgot">Forgot password</button>
+        </div>
+
+        <form id="cloudSignInForm" class="form-grid cloud-form">
+          <label>Email<input id="cloudSignInEmail" type="email" autocomplete="email" required></label>
+          <label>Password<input id="cloudSignInPassword" type="password" autocomplete="current-password" required></label>
+          <button class="primary full" type="submit">Sign in</button>
+        </form>
+
+        <form id="cloudSignUpForm" class="form-grid cloud-form hidden">
+          <label>Email<input id="cloudSignUpEmail" type="email" autocomplete="email" required></label>
+          <label>Password<input id="cloudSignUpPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+          <p class="secondary-text">At least 8 characters. This creates a free account &mdash; cloud sync is a separate, optional 3-month trial you start whenever you're ready.</p>
+          <button class="primary full" type="submit">Create account</button>
+        </form>
+
+        <form id="cloudForgotRequestForm" class="form-grid cloud-form hidden">
+          <label>Email<input id="cloudForgotEmail" type="email" autocomplete="email" required></label>
+          <p class="secondary-text">We'll email a code you can enter here &mdash; no need to leave the extension.</p>
+          <button class="primary full" type="submit">Send code</button>
+        </form>
+
+        <form id="cloudForgotConfirmForm" class="form-grid cloud-form hidden">
+          <label>Code from your email<input id="cloudForgotCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="32" required></label>
+          <label>New password<input id="cloudForgotNewPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+          <button class="primary full" type="submit">Set new password</button>
+          <button id="cloudForgotBack" class="link-button" type="button">Back to sign in</button>
+        </form>
+
+        <p id="cloudAccountFormStatus" class="form-status" aria-live="polite"></p>
+      </div>
+    </section>
+
     <a id="accountDonateButton" class="donate-row" href="https://paypal.me/ImmersionTrack" target="_blank" rel="noopener noreferrer">Donate &mdash; support development</a>
   </dialog>
 

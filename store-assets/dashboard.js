@@ -4,6 +4,7 @@ const forceDemo = dashboardParams.get("demo") === "1";
 const demoTheme = dashboardParams.get("theme") === "light" ? "light" : "dark";
 const now = () => extensionApi && !forceDemo ? new Date() : new Date(2026, 7, 28, 18, 42);
 let latestDashboard = null;
+let latestAccountState = null;
 let refreshTimer = null;
 let selectedProDays = 30;
 let weekOffset = 0;
@@ -593,7 +594,9 @@ function renderDashboard(dashboard) {
   document.querySelector(".profile>b").textContent = target.code.toUpperCase().slice(0, 2);
   setText("dashboardProfileMeta", state.preferences?.targetLanguageDeferred === true || target.code === "und"
     ? "Choose a target language"
-    : "Local beta profile");
+    : latestAccountState?.account?.connected
+      ? (latestAccountState.email || "Signed in")
+      : "Local beta profile");
   const keys = weekKeys(weekReference());
   const start = dateFromKey(keys[0]);
   const end = dateFromKey(keys[6]);
@@ -615,6 +618,38 @@ async function refreshDashboard() {
   const dashboard = extensionApi && !forceDemo ? await sendMessage({ type: "getDashboard" }) : demoDashboard();
   if (dashboard) renderDashboard(dashboard);
   else setStatus("Could not read tracker data.", true);
+}
+
+function renderAccountCard() {
+  const summary = document.getElementById("dashboardAccountSummary");
+  const status = document.getElementById("dashboardAccountStatus");
+  const signOutButton = document.getElementById("dashboardSignOutButton");
+  const signedIn = Boolean(latestAccountState?.account?.connected);
+  if (summary) {
+    summary.textContent = signedIn
+      ? "Cloud sync account connected. Manage sign-in from the extension popup's Account & plan panel."
+      : "Optional login, 3-month free cloud-sync trial. Sign in from the extension popup's Account & plan panel.";
+  }
+  if (status) {
+    status.textContent = !latestAccountState
+      ? ""
+      : signedIn
+        ? `Signed in as ${latestAccountState.email || "your account"}`
+        : latestAccountState.account?.status === "expired"
+          ? "Your session expired - sign in again from the popup."
+          : "Not signed in.";
+  }
+  if (signOutButton) signOutButton.hidden = !signedIn;
+}
+
+async function refreshAccountState() {
+  const response = extensionApi && !forceDemo ? await sendMessage({ type: "getAccountState" }) : null;
+  latestAccountState = response?.ok ? response : { ok: false, cloudReady: false, email: "", account: { status: "guest", connected: false } };
+  renderAccountCard();
+  // Profile-meta text (header + account card heading) depends on account
+  // state too - re-render against the last-known dashboard snapshot rather
+  // than duplicating that branch here.
+  if (latestDashboard) renderDashboard(latestDashboard);
 }
 
 function scheduleRefresh() {
@@ -746,6 +781,10 @@ document.getElementById("dashboardProfile").addEventListener("click", () => {
   card.classList.add("account-focus");
   setTimeout(() => card.classList.remove("account-focus"), 1800);
 });
+document.getElementById("dashboardSignOutButton").addEventListener("click", async () => {
+  await sendMessage({ type: "cloudSignOut" });
+  await refreshAccountState();
+});
 document.getElementById("dashboardExportJson").addEventListener("click", async () => {
   const response = await sendMessage({ type: "exportData" });
   if (!response?.ok) { setStatus("Could not export data.", true); return; }
@@ -781,6 +820,11 @@ document.getElementById("dashboardReset").addEventListener("click", async () => 
 if (extensionApi) {
   chrome.storage.onChanged.addListener(scheduleRefresh);
   setInterval(refreshDashboard, 5000);
+  // Signing in/out happens from the popup, which this already-open tab has
+  // no other way to hear about - poll occasionally so it doesn't show stale
+  // "Local beta profile" text after the user signs in elsewhere.
+  setInterval(refreshAccountState, 5000);
 }
 selectView(new URLSearchParams(location.search).get("view") || "stats");
 refreshDashboard();
+refreshAccountState();

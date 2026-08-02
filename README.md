@@ -1,8 +1,15 @@
-# Language Immersion Tracker - version 1.9.0
+# Language Immersion Tracker - version 1.9.1
 
 A Chrome Manifest V3 extension for tracking active and passive immersion in any target language. It detects supported video playback on YouTube and major streaming services, provides a persistent manual timer for any source, tracks goals, and keeps each language's totals and remembered video decisions separate.
 
-The current release is local-only. Inactive, testable preparation for a later account/Supabase phase lives in `lib/account-state.js`, `lib/cloud-contract.js`, `supabase/`, and `NEXT_PHASE_ROADMAP.md`; none of it connects to a server or uploads user data.
+The published release remains local-only. The extension now contains a real, tested (but not yet live) optional Supabase account and cloud-sync path - sign-in UI, an upload queue, a three-month trial clock - in `lib/account-state.js`, `lib/supabase-auth.js`, `lib/supabase-rest.js`, `lib/cloud-contract.js`, `background.js`, and `supabase/`. It is held back from the published Chrome Web Store package (no bundled credentials, no `https://*.supabase.co/*` host permission) until the RLS checklist in `supabase/tests/rls-checklist.md` has been run against a live project with two real accounts - see `NEXT_PHASE_ROADMAP.md` and `release/RELEASE_CHECKLIST.md`.
+
+## What changed in version 1.9.1
+
+- Restored the labelled PayPal "Donate" button in the popup, Account & Plan panel, and dashboard.
+- Finished the Insights layout: full-size calendar, compact Weekly Immersion, five History entries shown normally and up to ten scrollable without resizing cards.
+- Built (but did not enable in this release) optional Supabase sign-in, an idempotent cloud-sync upload queue, and a three-month free sync trial that never affects local tracking.
+- Updated `PRIVACY.md` to disclose the optional account/cloud-sync and (not-yet-enabled) consent-based analytics capabilities now present in the code.
 
 ## What changed in version 1.9.0
 

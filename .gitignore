@@ -1,0 +1,9 @@
+# Real Supabase credentials for local/dev builds. Never commit this — only
+# config/cloud-config.example.json (with placeholder values) is tracked.
+config/cloud-config.json
+
+# Visual Studio scratch folder, not part of the extension.
+.vs/
+
+# Dependencies, if ever installed locally.
+node_modules/

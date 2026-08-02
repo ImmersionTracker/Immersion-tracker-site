@@ -922,7 +922,138 @@ function openAccountInfoDialog() {
       : "One active target · " + target.name;
   const dialog = document.getElementById("accountInfoDialog");
   if (!dialog.open) dialog.showModal();
+  refreshAccountState();
 }
+
+let latestAccountState = null;
+let cloudMode = "signin";
+
+function setCloudFormStatus(message, isError = false) {
+  const status = document.getElementById("cloudAccountFormStatus");
+  status.textContent = message || "";
+  status.classList.toggle("error", Boolean(message) && isError);
+}
+
+function setCloudMode(mode) {
+  cloudMode = mode;
+  document.querySelectorAll("[data-cloud-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.cloudMode === mode || (mode === "forgot-confirm" && button.dataset.cloudMode === "forgot"));
+  });
+  document.getElementById("cloudSignInForm").classList.toggle("hidden", mode !== "signin");
+  document.getElementById("cloudSignUpForm").classList.toggle("hidden", mode !== "signup");
+  document.getElementById("cloudForgotRequestForm").classList.toggle("hidden", mode !== "forgot");
+  document.getElementById("cloudForgotConfirmForm").classList.toggle("hidden", mode !== "forgot-confirm");
+  setCloudFormStatus("");
+}
+
+function renderAccountSection() {
+  const account = latestAccountState?.account;
+  const signedIn = account?.status === "authenticated" && account?.connected;
+  document.getElementById("cloudSignedInView").classList.toggle("hidden", !signedIn);
+  document.getElementById("cloudGuestView").classList.toggle("hidden", signedIn);
+  const statusText = document.getElementById("cloudAccountStatus");
+  if (!latestAccountState) {
+    statusText.textContent = "Checking cloud sync status...";
+  } else if (!latestAccountState.cloudReady) {
+    statusText.textContent = "Cloud sync isn't set up on this build yet. Local tracking keeps working either way.";
+  } else if (signedIn) {
+    statusText.textContent = "Signed in.";
+  } else if (account?.status === "expired") {
+    statusText.textContent = "Your session expired. Sign in again to keep using cloud sync.";
+  } else {
+    statusText.textContent = "Not signed in · your local history keeps working either way.";
+  }
+  const trialStatusEl = document.getElementById("cloudTrialStatus");
+  if (signedIn) {
+    document.getElementById("cloudAccountEmail").textContent = latestAccountState.email || "your account";
+    const trial = latestAccountState.trial;
+    if (!trial?.startedAt) {
+      trialStatusEl.textContent = "Cloud sync is starting up on this device...";
+    } else if (trial.active) {
+      trialStatusEl.textContent = trial.daysRemaining <= 1
+        ? "Free cloud-sync trial ends today."
+        : `Free cloud-sync trial — ${trial.daysRemaining} days left.`;
+    } else {
+      trialStatusEl.textContent = "Your 3-month cloud-sync trial has ended. Local tracking keeps working — cloud sync is paused.";
+    }
+  } else {
+    setCloudMode(cloudMode === "forgot-confirm" ? cloudMode : "signin");
+  }
+}
+
+async function refreshAccountState() {
+  const response = await sendRuntimeMessage({ type: "getAccountState" });
+  latestAccountState = response?.ok ? response : { ok: false, cloudReady: false, account: { status: "guest", connected: false } };
+  renderAccountSection();
+}
+
+document.querySelectorAll("[data-cloud-mode]").forEach((button) => {
+  button.addEventListener("click", () => setCloudMode(button.dataset.cloudMode));
+});
+
+document.getElementById("cloudForgotBack").addEventListener("click", () => setCloudMode("signin"));
+
+document.getElementById("cloudSignInForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = document.getElementById("cloudSignInEmail").value.trim();
+  const password = document.getElementById("cloudSignInPassword").value;
+  setCloudFormStatus("Signing in...");
+  const response = await sendRuntimeMessage({ type: "cloudSignIn", email, password });
+  if (response?.ok) {
+    document.getElementById("cloudSignInPassword").value = "";
+    await refreshAccountState();
+  } else {
+    setCloudFormStatus(response?.error?.message || "Could not sign in.", true);
+  }
+});
+
+document.getElementById("cloudSignUpForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = document.getElementById("cloudSignUpEmail").value.trim();
+  const password = document.getElementById("cloudSignUpPassword").value;
+  setCloudFormStatus("Creating your account...");
+  const response = await sendRuntimeMessage({ type: "cloudSignUp", email, password });
+  if (response?.ok) {
+    document.getElementById("cloudSignUpPassword").value = "";
+    await refreshAccountState();
+  } else {
+    setCloudFormStatus(response?.error?.message || "Could not create your account.", true);
+  }
+});
+
+document.getElementById("cloudForgotRequestForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = document.getElementById("cloudForgotEmail").value.trim();
+  setCloudFormStatus("Sending code...");
+  const response = await sendRuntimeMessage({ type: "cloudRequestPasswordReset", email });
+  if (response?.ok) {
+    setCloudMode("forgot-confirm");
+    setCloudFormStatus("If that email has an account, a code is on its way. Enter it below.");
+  } else {
+    setCloudFormStatus(response?.error?.message || "Enter a valid email address.", true);
+  }
+});
+
+document.getElementById("cloudForgotConfirmForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = document.getElementById("cloudForgotEmail").value.trim();
+  const code = document.getElementById("cloudForgotCode").value.trim();
+  const newPassword = document.getElementById("cloudForgotNewPassword").value;
+  setCloudFormStatus("Setting your new password...");
+  const response = await sendRuntimeMessage({ type: "cloudConfirmPasswordReset", email, code, newPassword });
+  if (response?.ok) {
+    document.getElementById("cloudForgotCode").value = "";
+    document.getElementById("cloudForgotNewPassword").value = "";
+    await refreshAccountState();
+  } else {
+    setCloudFormStatus(response?.error?.message || "That code is invalid or expired.", true);
+  }
+});
+
+document.getElementById("cloudSignOutButton").addEventListener("click", async () => {
+  await sendRuntimeMessage({ type: "cloudSignOut" });
+  await refreshAccountState();
+});
 
 document.getElementById("targetLanguageSelect").addEventListener("change", async (event) => {
   if (event.target.value === "custom") {

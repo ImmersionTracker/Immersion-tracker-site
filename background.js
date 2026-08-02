@@ -1,7 +1,15 @@
-importScripts("lib/tracker-data.js", "lib/tracker-analytics.js", "lib/entitlements.js");
+importScripts(
+  "lib/tracker-data.js", "lib/tracker-analytics.js", "lib/entitlements.js",
+  "lib/cloud-config.js", "lib/cloud-contract.js", "lib/account-state.js", "lib/supabase-auth.js",
+  "lib/supabase-rest.js"
+);
 
 const LOCAL_STATE_KEY = "japaneseImmersionTrackerState";
 const DEVICE_ID_KEY = "japaneseImmersionTrackerDeviceId";
+// Raw Supabase session tokens live in their own storage key - deliberately
+// never part of `state`, so they can never end up in JSON/CSV exports, Chrome
+// Sync, or the canonical-data reconciliation path.
+const ACCOUNT_SESSION_KEY = "japaneseImmersionTrackerAccountSessionV1";
 const MIGRATION_BACKUP_KEY = "japaneseImmersionTrackerMigrationBackupV8";
 const MIGRATION_STAGE_KEY = "japaneseImmersionTrackerMigrationStageV9";
 const SYNC_RECORD_PREFIX = "jitRecordV2:";
@@ -21,6 +29,11 @@ const SYNC_MONTH_RETENTION = 6;
 const STORAGE_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_TARGET_LANGUAGE = { code: "ja", name: "Japanese" };
 const WEEKLY_REVIEW_ALARM = "litWeeklyReviewV1";
+const CLOUD_UPLOAD_ALARM = "jitCloudUploadV1";
+// Cloud sync is a separate, optional 3-month trial that starts the first
+// time a device successfully registers against Supabase - not at sign-up.
+// Local tracking is never gated by this; only the upload queue is.
+const CLOUD_TRIAL_MONTHS = 3;
 const LANGUAGE_NAMES = {
   auto: "Automatic (Pro)",
   ja: "Japanese", en: "English", sv: "Swedish", es: "Spanish", fr: "French",
@@ -147,6 +160,10 @@ const emptyState = () => ({
     detailCutoffDate: "",
     privacyDecisionMigration: 0
   },
+  // Cloud-sync bookkeeping only - never raw tokens (those stay in
+  // ACCOUNT_SESSION_KEY, outside this exportable state entirely). Shape
+  // matches TrackerCloudContract.createCloudState() plus the trial fields.
+  cloud: { ...TrackerCloudContract.createCloudState({}), trialStartedAt: 0, trialExpiresAt: 0 },
   dataModel: {
     schemaVersion: TrackerData.SCHEMA_VERSION,
     source: "canonical-daily-totals"
@@ -393,6 +410,11 @@ function normalizeState(stored, options = {}) {
       ...emptyState().dataModel,
       ...(stored.dataModel || {})
     },
+    cloud: {
+      ...TrackerCloudContract.createCloudState(stored.cloud),
+      trialStartedAt: Number(stored.cloud?.trialStartedAt) || 0,
+      trialExpiresAt: Number(stored.cloud?.trialExpiresAt) || 0
+    },
     entitlements: TrackerEntitlements.normalize(stored.entitlements)
   };
   if (!options.skipCanonical) {
@@ -491,6 +513,7 @@ function updateState(mutator) {
     compactOldHistory(state);
     state.entitlements = TrackerEntitlements.normalize(state.entitlements);
     const reconciliation = TrackerData.reconcile(state);
+    if (reconciliation.ok) await enqueuePendingCloudSnapshots(state);
     if (!reconciliation.ok) {
       console.error("Canonical daily totals divergence", reconciliation.differences.slice(0, 10));
       lastStorageWriteError = {
@@ -533,13 +556,20 @@ dataReady = initializeCanonicalData().catch((error) => {
   throw error;
 });
 
+let cachedDeviceId = "";
+
 async function getDeviceId() {
+  if (cachedDeviceId) return cachedDeviceId;
   const result = await chrome.storage.local.get(DEVICE_ID_KEY);
-  if (result[DEVICE_ID_KEY]) return result[DEVICE_ID_KEY];
+  if (result[DEVICE_ID_KEY]) {
+    cachedDeviceId = result[DEVICE_ID_KEY];
+    return cachedDeviceId;
+  }
   const id = typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await chrome.storage.local.set({ [DEVICE_ID_KEY]: id });
+  cachedDeviceId = id;
   return id;
 }
 
@@ -1212,6 +1242,7 @@ function ensureSyncAlarm() {
   chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 1 });
   chrome.alarms.create(MANUAL_ALARM, { periodInMinutes: 1 });
   chrome.alarms.create(WEEKLY_REVIEW_ALARM, { when: nextWeeklyReviewAt(), periodInMinutes: 7 * 24 * 60 });
+  chrome.alarms.create(CLOUD_UPLOAD_ALARM, { periodInMinutes: 3 });
   try {
     chrome.idle.setDetectionInterval(60);
   } catch {
@@ -1236,6 +1267,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     checkpointManualTimer().then((result) => result?.timer?.languageCode && notifyGoalCompletions(result.timer.languageCode));
   }
   if (alarm.name === WEEKLY_REVIEW_ALARM) showWeeklyReview();
+  if (alarm.name === CLOUD_UPLOAD_ALARM) drainUploadQueue().catch(() => null);
 });
 
 chrome.idle.onStateChanged.addListener((newState) => {
@@ -1251,6 +1283,264 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
   dashboardCache = { at: 0, languageCode: "", records: null };
 });
+
+let cloudConfigCache = null;
+
+async function getCloudConfig() {
+  if (cloudConfigCache) return cloudConfigCache;
+  try {
+    const response = await fetch(chrome.runtime.getURL("config/cloud-config.json"));
+    const raw = await response.json();
+    cloudConfigCache = TrackerCloudConfig.normalize(raw);
+  } catch {
+    // No untracked config/cloud-config.json in this build (e.g. a fresh
+    // checkout without dev credentials filled in) - fail closed, not open.
+    cloudConfigCache = TrackerCloudConfig.disabled();
+  }
+  return cloudConfigCache;
+}
+
+async function getAccountSession() {
+  const result = await chrome.storage.local.get(ACCOUNT_SESSION_KEY);
+  const session = result[ACCOUNT_SESSION_KEY];
+  return session && typeof session === "object" ? session : null;
+}
+
+async function setAccountSession(session) {
+  await chrome.storage.local.set({ [ACCOUNT_SESSION_KEY]: session });
+}
+
+async function clearAccountSession() {
+  await chrome.storage.local.remove(ACCOUNT_SESSION_KEY);
+}
+
+function accountStateFromSession(session) {
+  if (!session) return TrackerAccountState.guest();
+  return TrackerAccountState.normalize({
+    status: "authenticated",
+    provider: "supabase",
+    userId: session.userId,
+    sessionExpiresAt: session.expiresAt,
+    lastAuthenticatedAt: session.authenticatedAt
+  });
+}
+
+async function fetchJson(request) {
+  const response = await fetch(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: request.method === "GET" ? undefined : JSON.stringify(request.body || {})
+  });
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
+}
+
+// Returns a session with a still-valid access token, transparently
+// refreshing it against Supabase if it has expired or is about to. Used by
+// the (later) device-registration and upload-queue paths, which need a
+// live bearer token rather than just a status readout.
+async function ensureFreshSession() {
+  const session = await getAccountSession();
+  if (!session) return null;
+  const account = accountStateFromSession(session);
+  if (account.status === "authenticated" && Number(session.expiresAt) - Date.now() > 60000) return session;
+  if (!session.refreshToken) {
+    await clearAccountSession();
+    return null;
+  }
+  const config = await getCloudConfig();
+  if (!config.enabled) return null;
+  try {
+    const { ok, json } = await fetchJson(TrackerSupabaseAuth.buildRefreshRequest(config, { refreshToken: session.refreshToken }));
+    if (!ok) {
+      await clearAccountSession();
+      return null;
+    }
+    const refreshed = TrackerSupabaseAuth.parseSession(json);
+    if (!refreshed) {
+      await clearAccountSession();
+      return null;
+    }
+    await setAccountSession(refreshed);
+    return refreshed;
+  } catch {
+    // Offline or Supabase unreachable: keep using the existing session until
+    // it actually expires rather than signing the device out over a blip.
+    return Number(session.expiresAt) > Date.now() ? session : null;
+  }
+}
+
+// Registers (or re-registers) this device against tracker_devices. Safe to
+// call repeatedly - it's a plain upsert keyed on (user_id, device_id), so
+// running it again just refreshes last_seen_at and, after a remote reset,
+// moves the device onto the new data_generation. Never throws; failures are
+// reported in the return value so callers (sign-in, sign-up, the upload
+// queue) can decide whether to surface or silently retry later.
+async function recordCloudError(reason) {
+  await updateState((state) => {
+    state.cloud.lastError = String(reason || "").slice(0, 180);
+    return { ok: true };
+  });
+  return { ok: false, reason };
+}
+
+async function registerDevice(session) {
+  if (!session?.accessToken || !session?.userId) return { ok: false, reason: "no-session" };
+  const config = await getCloudConfig();
+  if (!config.enabled) return { ok: false, reason: "cloud-disabled" };
+  try {
+    const profileResponse = await fetchJson(TrackerSupabaseRest.buildGetProfileRequest(config, {
+      accessToken: session.accessToken,
+      userId: session.userId
+    }));
+    const profile = profileResponse.ok ? TrackerSupabaseRest.parseProfile(profileResponse.json) : null;
+    if (!profile) return recordCloudError("profile-unavailable");
+
+    const deviceId = await getDeviceId();
+    const deviceResponse = await fetchJson(TrackerSupabaseRest.buildUpsertDeviceRequest(config, {
+      accessToken: session.accessToken,
+      userId: session.userId,
+      deviceId,
+      generation: profile.generation
+    }));
+    if (!deviceResponse.ok) return recordCloudError("device-upsert-failed");
+
+    const now = Date.now();
+    await updateState((state) => {
+      // A generation bump (from a server-side reset on any device) means
+      // every previously-queued or previously-confirmed snapshot refers to
+      // data that no longer exists remotely. Drop that bookkeeping so the
+      // next drain re-plans uploads from scratch under the new generation,
+      // instead of silently skipping rows it thinks are already synced.
+      const generationChanged = state.cloud.deviceRegistered && state.cloud.generation !== profile.generation;
+      state.cloud.deviceRegistered = true;
+      state.cloud.generation = profile.generation;
+      state.cloud.lastError = "";
+      if (generationChanged) {
+        state.cloud.queue = {};
+        state.cloud.remoteRevisions = {};
+      }
+      if (!state.cloud.trialStartedAt) {
+        state.cloud.trialStartedAt = now;
+        state.cloud.trialExpiresAt = addUtcMonths(now, CLOUD_TRIAL_MONTHS);
+      }
+      return { ok: true };
+    });
+    scheduleUploadDrain();
+    return { ok: true, generation: profile.generation };
+  } catch (error) {
+    return recordCloudError(String(error?.message || "network-error").slice(0, 180));
+  }
+}
+
+function addUtcMonths(ms, months) {
+  const date = new Date(Number(ms) || Date.now());
+  date.setUTCMonth(date.getUTCMonth() + Math.round(Number(months) || 0));
+  return date.getTime();
+}
+
+// Whether the free cloud-sync trial is still open. Undefined/zero trial
+// fields mean sync has never been activated on this account, which reads as
+// "not active" rather than "active forever" - callers that need to
+// distinguish "never started" from "expired" should check trialStartedAt.
+function cloudTrialActive(cloud, now = Date.now()) {
+  const expiresAt = Number(cloud?.trialExpiresAt) || 0;
+  return expiresAt > 0 && now < expiresAt;
+}
+
+// Runs after every successful state write. Cheap no-op for the common case
+// (no cloud account, or nothing changed) - it only does work once a device
+// is registered, and planUploads() itself only returns snapshots whose
+// revision has moved past what the server last confirmed.
+async function enqueuePendingCloudSnapshots(state) {
+  if (!state.cloud?.deviceRegistered || !(Number(state.cloud.generation) > 0)) return;
+  const deviceId = await getDeviceId();
+  const snapshots = TrackerCloudContract.planUploads(state.dailyRecords, state.cloud.remoteRevisions, {
+    deviceId,
+    generation: state.cloud.generation
+  });
+  if (!snapshots.length) return;
+  // planUploads() recomputes "what's pending" from scratch every time this
+  // runs (i.e. on every state update, not just ones that touched
+  // dailyRecords), based only on confirmed remote revisions. Without this
+  // filter, mergeQueue() would re-arm every still-pending entry back to
+  // attempts:0/nextAttemptAt:now on each call, permanently erasing retry
+  // backoff for anything that failed to upload. Only re-merge snapshots
+  // whose payload actually changed since they were queued.
+  const changed = snapshots.filter((snapshot) => {
+    const existing = state.cloud.queue[snapshot.snapshotId];
+    return !existing || Number(existing.payload?.revision) !== snapshot.revision;
+  });
+  if (!changed.length) return;
+  state.cloud.queue = TrackerCloudContract.mergeQueue(state.cloud.queue, changed, Date.now());
+  scheduleUploadDrain();
+}
+
+let uploadDrainTimer = null;
+
+// Coalesces bursts of state updates (e.g. a minute of active tracking ticks)
+// into a single drain attempt shortly after they settle, rather than firing
+// a network request per update.
+function scheduleUploadDrain(delayMs = 4000) {
+  if (uploadDrainTimer) return;
+  uploadDrainTimer = setTimeout(() => {
+    uploadDrainTimer = null;
+    drainUploadQueue().catch(() => null);
+  }, delayMs);
+}
+
+// Uploads whatever in the local queue is ready to retry, up to one batch.
+// Never throws - failures are recorded on state.cloud.lastError and the
+// affected entries get their retry backoff bumped, same shape as
+// TrackerCloudContract.retryEntry expects.
+async function drainUploadQueue({ force = false } = {}) {
+  const config = await getCloudConfig();
+  if (!config.enabled) return { ok: false, reason: "cloud-disabled" };
+  const session = await ensureFreshSession();
+  if (!session) return { ok: false, reason: "no-session" };
+
+  const state = await readState();
+  if (!state.cloud.deviceRegistered) return { ok: false, reason: "device-not-registered" };
+  if (!force && !cloudTrialActive(state.cloud)) return { ok: false, reason: "trial-expired" };
+
+  const now = Date.now();
+  const batch = TrackerCloudContract.readyBatch(state.cloud.queue, now);
+  if (!batch.length) return { ok: true, uploaded: 0 };
+
+  try {
+    const request = TrackerSupabaseRest.buildUpsertDailyTotalsRequest(config, {
+      accessToken: session.accessToken,
+      userId: session.userId,
+      rows: batch.map((entry) => entry.payload)
+    });
+    const response = await fetchJson(request);
+    if (!response.ok) throw new Error(TrackerSupabaseRest.describeRestError(response.json, "Upload failed."));
+
+    await updateState((latest) => {
+      for (const entry of batch) {
+        delete latest.cloud.queue[entry.id];
+        latest.cloud.remoteRevisions[entry.id] = entry.payload.revision;
+      }
+      latest.cloud.lastUploadAt = now;
+      latest.cloud.lastError = "";
+      return { ok: true };
+    });
+    // More may have become ready (or arrived) while this batch was in
+    // flight; keep draining until a pass uploads nothing.
+    if (batch.length === TrackerCloudContract.MAX_BATCH_SIZE) scheduleUploadDrain(0);
+    return { ok: true, uploaded: batch.length };
+  } catch (error) {
+    await updateState((latest) => {
+      for (const entry of batch) {
+        const current = latest.cloud.queue[entry.id];
+        if (current) latest.cloud.queue[entry.id] = TrackerCloudContract.retryEntry(current, error, now);
+      }
+      latest.cloud.lastError = String(error?.message || "Upload failed.").slice(0, 180);
+      return { ok: true };
+    });
+    return { ok: false, reason: "upload-failed" };
+  }
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== "object" || sender.id !== chrome.runtime.id) return false;
@@ -1311,6 +1601,171 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await broadcastOverlayPreferences(result.preferences);
       sendResponse(result);
     });
+    return true;
+  }
+
+  if (message.type === "getAccountState") {
+    (async () => {
+      const [config, session, state] = await Promise.all([getCloudConfig(), getAccountSession(), readState()]);
+      const now = Date.now();
+      sendResponse({
+        ok: true,
+        cloudReady: config.enabled,
+        // Email is deliberately not part of TrackerAccountState's shape (that
+        // lib stays credential/PII-minimal on purpose) - attach it here at
+        // the message-response level instead, for the UI to display.
+        email: session?.email || "",
+        account: TrackerAccountState.publicSummary(accountStateFromSession(session)),
+        cloud: { ...state.cloud },
+        trial: {
+          startedAt: state.cloud.trialStartedAt,
+          expiresAt: state.cloud.trialExpiresAt,
+          active: cloudTrialActive(state.cloud, now),
+          daysRemaining: state.cloud.trialExpiresAt
+            ? Math.max(0, Math.ceil((state.cloud.trialExpiresAt - now) / 86400000))
+            : 0
+        }
+      });
+    })();
+    return true;
+  }
+
+  if (message.type === "cloudSignUp") {
+    (async () => {
+      try {
+        const config = await getCloudConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, error: { code: "cloud-disabled", message: "Cloud sync isn't set up yet." } });
+          return;
+        }
+        const request = TrackerSupabaseAuth.buildSignUpRequest(config, { email: message.email, password: message.password });
+        const { ok, json } = await fetchJson(request);
+        if (!ok) {
+          sendResponse({ ok: false, error: TrackerSupabaseAuth.parseAuthError(json, "Could not create your account.") });
+          return;
+        }
+        const session = TrackerSupabaseAuth.parseSession(json);
+        if (!session) {
+          sendResponse({ ok: false, error: { code: "confirmation-required", message: "Check your email to confirm your account, then sign in." } });
+          return;
+        }
+        await setAccountSession(session);
+        // Awaited (not fire-and-forget): an un-awaited promise here could get
+        // cut off if the service worker is suspended right after responding.
+        // registerDevice() never throws, so this can't turn a real sign-in
+        // failure into a false negative - it only adds one round-trip.
+        await registerDevice(session);
+        sendResponse({ ok: true, email: session.email || "", account: TrackerAccountState.publicSummary(accountStateFromSession(session)) });
+      } catch (error) {
+        sendResponse({ ok: false, error: { code: "invalid-input", message: String(error?.message || "Could not create your account.") } });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "cloudSignIn") {
+    (async () => {
+      try {
+        const config = await getCloudConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, error: { code: "cloud-disabled", message: "Cloud sync isn't set up yet." } });
+          return;
+        }
+        const request = TrackerSupabaseAuth.buildSignInRequest(config, { email: message.email, password: message.password });
+        const { ok, json } = await fetchJson(request);
+        if (!ok) {
+          sendResponse({ ok: false, error: TrackerSupabaseAuth.parseAuthError(json, "Incorrect email or password.") });
+          return;
+        }
+        const session = TrackerSupabaseAuth.parseSession(json);
+        if (!session) {
+          sendResponse({ ok: false, error: { code: "sign-in-failed", message: "Could not sign you in." } });
+          return;
+        }
+        await setAccountSession(session);
+        // Awaited (not fire-and-forget): an un-awaited promise here could get
+        // cut off if the service worker is suspended right after responding.
+        // registerDevice() never throws, so this can't turn a real sign-in
+        // failure into a false negative - it only adds one round-trip.
+        await registerDevice(session);
+        sendResponse({ ok: true, email: session.email || "", account: TrackerAccountState.publicSummary(accountStateFromSession(session)) });
+      } catch (error) {
+        sendResponse({ ok: false, error: { code: "invalid-input", message: String(error?.message || "Incorrect email or password.") } });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "cloudSignOut") {
+    (async () => {
+      const session = await getAccountSession();
+      if (session?.accessToken) {
+        try {
+          const config = await getCloudConfig();
+          if (config.enabled) await fetchJson(TrackerSupabaseAuth.buildSignOutRequest(config, { accessToken: session.accessToken }));
+        } catch {
+          // Best-effort server-side revoke; the device signs out locally regardless.
+        }
+      }
+      await clearAccountSession();
+      sendResponse({ ok: true, account: TrackerAccountState.publicSummary(TrackerAccountState.guest()) });
+    })();
+    return true;
+  }
+
+  if (message.type === "cloudRequestPasswordReset") {
+    (async () => {
+      try {
+        const config = await getCloudConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, error: { code: "cloud-disabled", message: "Cloud sync isn't set up yet." } });
+          return;
+        }
+        const request = TrackerSupabaseAuth.buildRequestPasswordResetRequest(config, { email: message.email });
+        await fetchJson(request);
+        // Always report success, whether or not that email has an account -
+        // otherwise this endpoint becomes a way to check who's registered.
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: { code: "invalid-input", message: String(error?.message || "Enter a valid email address.") } });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "cloudConfirmPasswordReset") {
+    (async () => {
+      try {
+        const config = await getCloudConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, error: { code: "cloud-disabled", message: "Cloud sync isn't set up yet." } });
+          return;
+        }
+        const verify = await fetchJson(TrackerSupabaseAuth.buildVerifyRecoveryRequest(config, { email: message.email, token: message.code }));
+        if (!verify.ok) {
+          sendResponse({ ok: false, error: TrackerSupabaseAuth.parseAuthError(verify.json, "That code is invalid or expired.") });
+          return;
+        }
+        const recoverySession = TrackerSupabaseAuth.parseSession(verify.json);
+        if (!recoverySession) {
+          sendResponse({ ok: false, error: { code: "verify-failed", message: "That code is invalid or expired." } });
+          return;
+        }
+        const update = await fetchJson(TrackerSupabaseAuth.buildUpdatePasswordRequest(config, {
+          accessToken: recoverySession.accessToken,
+          password: message.newPassword
+        }));
+        if (!update.ok) {
+          sendResponse({ ok: false, error: TrackerSupabaseAuth.parseAuthError(update.json, "Could not set your new password.") });
+          return;
+        }
+        await setAccountSession(recoverySession);
+        await registerDevice(recoverySession);
+        sendResponse({ ok: true, email: recoverySession.email || "", account: TrackerAccountState.publicSummary(accountStateFromSession(recoverySession)) });
+      } catch (error) {
+        sendResponse({ ok: false, error: { code: "invalid-input", message: String(error?.message || "Could not reset your password.") } });
+      }
+    })();
     return true;
   }
 

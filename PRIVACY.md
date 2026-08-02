@@ -1,6 +1,6 @@
 # Privacy Policy for Language Immersion Tracker
 
-Effective date: July 18, 2026
+Effective date: August 2, 2026
 
 Language Immersion Tracker records active and passive language-immersion time on supported video websites and from entries that the user adds manually. This policy explains the information the extension handles and how it is used.
 
@@ -27,22 +27,41 @@ The information is used only to:
 - determine whether eligible target-language playback should be recorded;
 - calculate immersion totals, goals, streaks, history, and notifications;
 - remember user-approved language decisions for exact videos, channels, and explicitly approved related-content groups;
-- synchronize supported tracker data between the user's Chrome installations when Chrome Sync is enabled; and
+- synchronize supported tracker data between the user's Chrome installations when Chrome Sync is enabled;
+- synchronize the same privacy-minimal daily-totals data to the user's own account when the user chooses to create an account and turn on cloud sync (see below); and
 - provide user-requested JSON and CSV backup import and export.
 
 ## Storage and sharing
 
 Complete tracker history and settings are stored in Chrome extension storage on the user's device. Compact daily totals, remembered language decisions, goal settings, and reset markers may be stored through `chrome.storage.sync` so Chrome can synchronize them between the user's signed-in Chrome installations. Chrome Sync is operated by Google and is subject to the user's Chrome and Google account settings.
 
-Language Immersion Tracker has no developer-operated backend, analytics service, advertising SDK, payment integration, or database. The developer does not receive, sell, rent, or share tracker data. The dashboard and popup read the same data directly from extension storage.
+Language Immersion Tracker has no advertising SDK and no payment integration. It does not sell, rent, or share tracker data with third parties. The dashboard and popup read the same data directly from extension storage. The extension's optional account and cloud-sync feature is described in its own section below; product analytics is described there too and is not yet enabled in this build.
+
+## Optional account and cloud sync
+
+**This capability is not enabled in the currently published version.** The extension's code supports it, but the published package does not include Supabase server credentials or network access to Supabase, so any attempt to sign in will show "Cloud sync isn't set up yet." and nothing is sent anywhere. This section documents the feature so it does not need to be written from scratch the day it is turned on; this policy will be republished with an updated effective date at that point.
+
+Signing in is never required. Local tracking, goals, history, and exports work fully without an account, and continue to work exactly the same way if an account is never created, is signed out of, or its free sync trial ends.
+
+If the user chooses to create an account, the extension uses [Supabase](https://supabase.com) - a third-party authentication and database provider - to handle sign-in. Supabase stores the account's email address and authentication credentials; the extension itself never stores or has access to the account password beyond forwarding it to Supabase's sign-in request.
+
+Turning on cloud sync starts a one-time, three-month free trial. During that trial, the extension uploads the same privacy-minimal daily totals described in "Data control and retention" - date, language, general source category, active seconds, passive seconds, and session count - tagged with a random per-device identifier (not a hardware identifier) so totals from multiple devices can be combined. As with local storage, **no video or channel titles, URLs, search terms, subtitle or page text, or manual-entry descriptions are ever uploaded.** The device's local copy of this data remains the primary copy at all times; cloud sync only mirrors it. If the trial ends or sync is turned off, local tracking is unaffected and continues permanently - only the cloud copy stops receiving updates.
+
+Cloud data is protected by Supabase Row Level Security so that an account can only ever read or write its own rows; the extension never embeds a Supabase service-role key, which would bypass that protection. To delete an account and its cloud-stored data, contact support through the channel listed at the end of this policy; self-service account deletion is planned but not yet available.
+
+## Optional product analytics
+
+The extension is designed to support optional, consent-based product analytics to help improve the extension - off by default, controlled separately from cloud sync, and never including titles, URLs, searches, subtitles, page text, or manual-entry descriptions. If collected, it would be limited to: target language, platform (e.g., YouTube or Netflix), active/passive duration, broad content type, date, and extension version. This policy will be updated with the details of where that data goes before the feature is turned on for any user; it is not yet enabled in this build.
 
 ## Data control and retention
 
-Daily active/passive totals, their dates, and source breakdowns remain on the device until the user edits them, uses **Reset all data**, or removes the extension. These daily records contain only date, language, general source, active time, passive time, and session count—not titles or URLs. Readable video, channel, and manual-action titles are limited to the latest ten History entries, regardless of their age; older readable sessions are removed. Remembered exact-video, channel, and related-content language choices use opaque hashed identifiers rather than readable titles. Unconfirmed playback time exists only in memory while a language question is awaiting an answer and is discarded if the user rejects it or leaves the video. Cumulative source totals contain only general sources such as YouTube, Netflix, reading, or listening. Users can export their data as JSON or CSV. To ensure synchronized copies are cleared, users should use **Reset all data** before uninstalling the extension.
+Daily active/passive totals, their dates, and source breakdowns remain on the device until the user edits them, uses **Reset all data**, or removes the extension. These daily records contain only date, language, general source, active time, passive time, and session count—not titles or URLs. Readable video, channel, and manual-action titles are limited to the latest ten History entries, regardless of their age; older readable sessions are removed. Remembered exact-video, channel, and related-content language choices use opaque hashed identifiers rather than readable titles. Unconfirmed playback time exists only in memory while a language question is awaiting an answer and is discarded if the user rejects it or leaves the video. Cumulative source totals contain only general sources such as YouTube, Netflix, reading, or listening. Users can export their data as JSON or CSV. To ensure synchronized copies (Chrome Sync and, if used, cloud sync) are cleared, users should use **Reset all data** before uninstalling the extension.
+
+The extension's popup and dashboard include an optional "Donate" link to the developer's PayPal.me page. Following it opens PayPal in a new tab; the extension does not send any tracker data to PayPal, and use of that site is subject to PayPal's own privacy policy.
 
 ## Security
 
-The extension uses Chrome's Manifest V3 security model, executes only code packaged with the extension, restricts its website access to declared supported video services, and does not send tracker data to developer-controlled servers.
+The extension uses Chrome's Manifest V3 security model, executes only code packaged with the extension, restricts its website access to declared supported video services, and does not send tracker data to developer-controlled servers other than the user's own account on the optional cloud-sync provider described above.
 
 ## Limited Use disclosure
 

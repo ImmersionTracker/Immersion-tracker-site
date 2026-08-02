@@ -3,7 +3,7 @@
   "scripts": {
     "screenshots": "node scripts/capture-store-screenshots.cjs",
     "validate:screenshots": "node scripts/validate-store-screenshots.cjs",
-    "test:foundation": "node tests/data-foundation.test.js && node tests/next-phase-foundation.test.js",
+    "test:foundation": "node tests/data-foundation.test.js && node tests/next-phase-foundation.test.js && node tests/cloud-auth.test.js && node tests/cloud-sync.test.js",
     "test": "npm run test:foundation && node tests/extension-regression.test.js && node tests/dashboard-ui.test.cjs && node tests/onboarding-ui.test.cjs && npm run validate:screenshots && npm run validate:release",
     "validate:release": "node scripts/validate-release.cjs"
   },

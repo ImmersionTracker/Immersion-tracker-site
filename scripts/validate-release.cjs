@@ -20,7 +20,7 @@ for (const host of manifest.host_permissions || []) assert(host.startsWith("http
 const sourceFiles = [
   "background.js", "content.js", "page-probe.js", "popup.js",
   "lib/tracker-data.js", "lib/tracker-analytics.js", "lib/entitlements.js", "lib/account-state.js",
-  "lib/cloud-config.js", "lib/cloud-contract.js",
+  "lib/cloud-config.js", "lib/cloud-contract.js", "lib/supabase-auth.js", "lib/supabase-rest.js",
   "popup.html", "store-assets/dashboard.html", "store-assets/capture.html"
 ];
 for (const file of sourceFiles) {
@@ -46,7 +46,15 @@ for (const required of [
 const readme = read("README.md");
 assert(readme.includes(`version ${manifest.version}`), "README version must match manifest version");
 const privacy = read("PRIVACY.md");
-assert(privacy.includes("has no developer-operated backend"), "current local-only privacy disclosure changed unexpectedly");
+// Tripwires, not a full policy review: these force a conscious PRIVACY.md
+// edit (and re-reading of this assertion) whenever the underlying disclosure
+// it guards actually changes, rather than letting it drift silently.
+assert(privacy.includes("Optional account and cloud sync"), "cloud-sync privacy disclosure is missing or was renamed unexpectedly");
+assert(privacy.includes("This capability is not enabled in the currently published version"),
+  "cloud-sync 'not enabled yet' disclosure changed unexpectedly - if cloud sync just went live, this assertion, PRIVACY.md, and the manifest host_permissions/config bundling must all be updated together, not separately");
+assert(privacy.includes("no advertising SDK and no payment integration"), "advertising/payment privacy disclosure changed unexpectedly");
+assert(privacy.includes("Optional product analytics") && privacy.includes("not yet enabled in this build"),
+  "analytics privacy disclosure changed unexpectedly - if analytics was just turned on, this assertion (and the policy text) must be updated deliberately, not left stale");
 
 const output = path.join(root, "store-assets", "output");
 const screenshots = [

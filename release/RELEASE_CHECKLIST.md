@@ -22,7 +22,8 @@
 ## Store submission
 
 - Build a fresh versioned ZIP from source files only.
-- Confirm no `.git`, tests, screenshots, drafts, Supabase files, real credentials, or local browser profiles are included.
+- Confirm no `.git`, tests, screenshots, drafts, real credentials, or local browser profiles are included.
+- Until "Before any future cloud release" below is complete: exclude `config/cloud-config.json` from the ZIP, and package a copy of `manifest.json` with `https://*.supabase.co/*` removed from `host_permissions` (the source `manifest.json` keeps the permission for local dev/testing - only the packaged copy is stripped). `lib/supabase-auth.js` and `lib/supabase-rest.js` must still be included; `background.js` imports them unconditionally and the service worker will fail to start without them, even though the feature is otherwise inert.
 - Host the privacy policy at a stable public HTTPS URL.
 - Complete permission justifications, data-use disclosures, distribution, and reviewer instructions.
 - Start with Private or Unlisted testing.

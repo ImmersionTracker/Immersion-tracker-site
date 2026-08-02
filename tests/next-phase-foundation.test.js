@@ -7,6 +7,7 @@ const AccountState = require(path.join(root, "lib", "account-state.js"));
 const CloudContract = require(path.join(root, "lib", "cloud-contract.js"));
 const CloudConfig = require(path.join(root, "lib", "cloud-config.js"));
 const Entitlements = require(path.join(root, "lib", "entitlements.js"));
+const SupabaseRest = require(path.join(root, "lib", "supabase-rest.js"));
 
 (function accountStateNeverStoresCredentials() {
   const now = Date.UTC(2026, 7, 1, 10, 0, 0);
@@ -138,6 +139,54 @@ const Entitlements = require(path.join(root, "lib", "entitlements.js"));
     "to authenticated"
   ]) assert(sql.includes(requirement), `Supabase draft is missing: ${requirement}`);
   assert(!/\b(title|url|session_title|video_title)\b/.test(sql), "cloud schema must not contain readable title or URL columns");
+})();
+
+(function uploadRequestsStayAlignedWithTheRlsChecklistAssumptions() {
+  // supabase/tests/rls-checklist.md item 6 ("retrying the same primary key
+  // replaces the snapshot rather than adding seconds") only holds if the
+  // client's on_conflict target actually matches the table's real primary
+  // key. This guards against the SQL and the REST request builder drifting
+  // apart silently - a mismatch here would turn every retried upload into a
+  // duplicate row instead of an idempotent replace.
+  const sql = fs.readFileSync(path.join(root, "supabase", "migrations", "0001_cloud_foundation.sql"), "utf8");
+  const totalsPk = /create table if not exists public\.tracker_daily_totals[\s\S]*?primary key \(([^)]+)\)/.exec(sql);
+  assert(totalsPk, "could not find tracker_daily_totals primary key in the migration");
+  const expectedTotalsPk = totalsPk[1].replace(/\s+/g, "");
+
+  const config = {
+    supabaseUrl: "https://sample.supabase.co",
+    supabaseAnonKey: "anon-key"
+  };
+  const totalsRequest = SupabaseRest.buildUpsertDailyTotalsRequest(config, {
+    accessToken: "token",
+    userId: "123e4567-e89b-42d3-a456-426614174000",
+    rows: [{
+      device_id: "device_12345678", generation: 1, date_key: "2026-08-01", language_code: "ja",
+      source: "reading", active_seconds: 1, passive_seconds: 0, session_count: 1, revision: 1,
+      client_updated_at: "2026-08-01T00:00:00.000Z", contract_version: 1
+    }]
+  });
+  const onConflict = new URL(totalsRequest.url).searchParams.get("on_conflict");
+  assert.equal(onConflict, expectedTotalsPk, "buildUpsertDailyTotalsRequest's on_conflict must match tracker_daily_totals's real primary key");
+
+  // Every row must be stamped with the caller's own session user id, even if
+  // a bogus one sneaks into the payload - RLS enforces this server-side too,
+  // but the client should never even try to send someone else's id.
+  const spoofed = SupabaseRest.buildUpsertDailyTotalsRequest(config, {
+    accessToken: "token",
+    userId: "123e4567-e89b-42d3-a456-426614174000",
+    rows: [{ ...totalsRequest.body[0], user_id: "00000000-0000-4000-8000-000000000000" }]
+  });
+  assert.equal(spoofed.body[0].user_id, "123e4567-e89b-42d3-a456-426614174000",
+    "rows must always be stamped with the authenticated session's own user id");
+
+  const devicesPk = /create table if not exists public\.tracker_devices[\s\S]*?primary key \(([^)]+)\)/.exec(sql);
+  assert(devicesPk, "could not find tracker_devices primary key in the migration");
+  const deviceRequest = SupabaseRest.buildUpsertDeviceRequest(config, {
+    accessToken: "token", userId: "123e4567-e89b-42d3-a456-426614174000", deviceId: "device_12345678", generation: 1
+  });
+  assert.equal(new URL(deviceRequest.url).searchParams.get("on_conflict"), devicesPk[1].replace(/\s+/g, ""),
+    "buildUpsertDeviceRequest's on_conflict must match tracker_devices's real primary key");
 })();
 
 console.log("Next-phase account, entitlement, cloud-contract, and SQL checks passed.");

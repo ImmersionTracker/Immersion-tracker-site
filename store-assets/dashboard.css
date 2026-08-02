@@ -300,7 +300,7 @@ th { padding: 7px; text-align: left; color: var(--muted); font-size: 7px; } td {
 }
 
 body { font-family: var(--font-body); }
-main { padding-block: 16px 18px; }
+main { padding-block: 16px 6px; }
 main > header { height: 56px; }
 .logo strong, h1, h2, .metrics strong, .goal-mini strong,
 .donut strong, .big-donut strong, .source-donut strong,
@@ -308,7 +308,7 @@ main > header { height: 56px; }
 .date-pill, .axis, .bar-day span, .bar-day b, .weekdays, .days,
 .panel-title > b, table th, .utility-text { font-family: var(--font-utility); font-variant-numeric: tabular-nums; }
 
-.metrics { gap: 10px; margin-bottom: 10px; }
+.metrics { gap: 10px; margin-bottom: 4px; }
 .metrics article { height: 92px; padding: 12px 16px; }
 .metrics strong { margin-top: 6px; font-size: 27px; letter-spacing: -.035em; }
 .grid { grid-template-rows: 274px 340px; gap: 10px; }

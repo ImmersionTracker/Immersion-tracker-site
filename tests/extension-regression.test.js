@@ -18,7 +18,7 @@ function values(source, expression) {
 }
 
 function testManifestAndMessageContracts() {
-  assert.equal(manifest.version, "1.9.0", "release version changed unexpectedly");
+  assert.equal(manifest.version, "1.9.1", "release version changed unexpectedly");
   assert(manifest.permissions.includes("unlimitedStorage"), "long-term local history needs unlimited storage");
   assert(background.includes('setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })'),
     "local and synced tracker data should not be directly exposed to content scripts");
@@ -29,7 +29,13 @@ function testManifestAndMessageContracts() {
     "extension pages need a self-only content security policy"
   );
   const contentMatches = new Set(manifest.content_scripts[0].matches);
-  assert.deepEqual(new Set(manifest.host_permissions), contentMatches);
+  const hostPermissions = new Set(manifest.host_permissions);
+  // The only host permission allowed beyond what content scripts inject into
+  // is the Supabase wildcard the background service worker needs for its own
+  // fetch() calls (cloud sync). Anything else creeping in here is a regression.
+  assert(hostPermissions.has("https://*.supabase.co/*"), "background.js needs host_permissions for its own Supabase fetch calls");
+  hostPermissions.delete("https://*.supabase.co/*");
+  assert.deepEqual(hostPermissions, contentMatches);
 
   const packagedFiles = [
     manifest.background?.service_worker,
@@ -219,7 +225,7 @@ async function testStorageWriteFailureRecovery() {
   const start = background.indexOf("function updateState");
   const end = background.indexOf("dataReady = initializeCanonicalData", start);
   let writes = 0;
-  const factory = new Function("readState", "writeState", "compactOldHistory", "TrackerEntitlements", "TrackerData", `
+  const factory = new Function("readState", "writeState", "compactOldHistory", "TrackerEntitlements", "TrackerData", "enqueuePendingCloudSnapshots", `
     let stateQueue = Promise.resolve();
     let dashboardCache = { at: 0, languageCode: "", records: null };
     let lastStorageWriteError = null;
@@ -230,7 +236,8 @@ async function testStorageWriteFailureRecovery() {
     async () => { writes += 1; if (writes === 1) throw new Error("quota full"); },
     () => null,
     { normalize: (value) => value || {} },
-    { reconcile: () => ({ ok: true, differences: [] }) }
+    { reconcile: () => ({ ok: true, differences: [] }) },
+    async () => null
   );
   const failed = await factory.updateState((state) => { state.value = 1; return { ok: true }; });
   assert.equal(failed.reason, "storage-write-failed");

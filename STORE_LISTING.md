@@ -14,9 +14,15 @@ Language Immersion Tracker helps you build a consistent language-learning habit 
 
 It can automatically track supported videos and streaming sessions when it recognizes that the spoken language matches your choice. If it cannot tell, it asks you to confirm and remembers the choice to reduce repeated questions. An optional fully manual mode can count every eligible video on supported playback pages as your selected language.
 
-See active and passive immersion separately, choose whether goals use all immersion or active time only, maintain streaks, add missed time manually, and review your progress. Each target language keeps its own progress. The extension also includes reminders, backups, optional Chrome Sync, and Light and Dark modes.
+See active and passive immersion separately, choose whether goals use all immersion or active time only, maintain streaks, add missed time manually, and review your progress on a full-page dashboard with a calendar, weekly immersion view, and scrollable history. Each target language keeps its own progress. Pro Analytics - deeper trend, streak, and source breakdowns - is unlocked for everyone during this beta.
 
-Your tracker data stays in your browser and optional Chrome Sync. The extension has no ads, analytics, external servers, or database. Open the responsive full-page dashboard whenever you want a wider view of your progress.
+The extension also includes reminders, JSON/CSV backup and import, optional Chrome Sync, and Light and Dark modes. It's completely free, with no ads and nothing to buy.
+
+Your tracker data stays in your browser and optional Chrome Sync. The extension has no analytics and does not send data to any external server in this version. If you'd like to support development, an optional "Donate" link is available in the popup - it simply opens PayPal in a new tab and never shares your tracker data.
+
+## Note for the next update that enables cloud sync
+
+Once the Supabase-backed optional account/cloud-sync feature (already built, currently held back - see `README.md`) actually ships, the paragraph above claiming "no external servers" must be replaced and the `https://*.supabase.co/*` host permission justification below must be filled in for real. Do not reuse this description verbatim once that happens.
 
 ## Permission justifications
 
@@ -63,7 +69,7 @@ Host `PRIVACY.md` at a stable public HTTPS URL and place that URL in the Develop
 - Register the dedicated publisher Google account and enable two-step verification.
 - Choose a publisher name and verify a frequently monitored contact email.
 - Declare Trader or Non-Trader accurately; EU trader information may be displayed publicly.
-- Upload `release/Language-Immersion-Tracker-1.6.0.zip`.
+- Upload `release/Language-Immersion-Tracker-1.9.1.zip` (local-only build: no Supabase host permission or credentials bundled - see `release/RELEASE_CHECKLIST.md`).
 - Do not include a manifest `key` in the Chrome Web Store package. Chrome Web Store assigns and maintains the published extension ID.
 - Provide at least one real 1280x800 or 640x400 product screenshot and a 440x280 promotional image.
 - Complete the Store listing, Privacy practices, Distribution, and Test instructions tabs.

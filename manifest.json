@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Language Immersion Tracker",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Tracks any target language with automatic video detection, separate language totals, goals, manual timers, hotkeys, and Chrome Sync.",
   "permissions": [
     "storage",
@@ -37,7 +37,8 @@
     "https://www.peacocktv.com/*",
     "https://www.crunchyroll.com/*",
     "https://www.hidive.com/*",
-    "https://tubitv.com/*"
+    "https://tubitv.com/*",
+    "https://*.supabase.co/*"
   ],
   "background": {
     "service_worker": "background.js"
