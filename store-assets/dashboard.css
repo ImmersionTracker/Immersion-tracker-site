@@ -370,7 +370,14 @@ td.activity-title { display: table-cell; overflow: visible; white-space: normal;
 .settings-card .setting { padding-block: 11px; }
 .settings-card .field { margin-top: 10px; }
 .settings-card .themes { margin-top: 10px; }
-.settings-card .sync { margin-block: 11px; }
+/* The Account card carries two stacked danger buttons (Delete account, Reset
+   immersion data). At 1280x800 the second one tipped the settings view 7px
+   past the viewport, so this trims the surrounding rhythm by 10px rather than
+   letting the only settings view that scrolls be the one with the destructive
+   actions in it. Keep dashboard-ui.test.cjs's viewport assertion in mind
+   before growing this card again. */
+.settings-card .sync { margin-block: 9px; }
+.settings-card button.danger { margin-top: 6px; }
 
 /* The full dashboard has its own legibility floor; popup microcopy remains compact. */
 header small, .panel > small, .panel-title small, .logo small, .goal-mini small,
