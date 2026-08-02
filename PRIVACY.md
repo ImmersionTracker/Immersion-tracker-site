@@ -35,7 +35,7 @@ The information is used only to:
 
 Complete tracker history and settings are stored in Chrome extension storage on the user's device. Compact daily totals, remembered language decisions, goal settings, and reset markers may be stored through `chrome.storage.sync` so Chrome can synchronize them between the user's signed-in Chrome installations. Chrome Sync is operated by Google and is subject to the user's Chrome and Google account settings.
 
-Language Immersion Tracker has no advertising SDK and no payment integration. It does not sell, rent, or share tracker data with third parties. The dashboard and popup read the same data directly from extension storage. The extension's optional account and cloud-sync feature is described in its own section below; product analytics is described there too and is not yet enabled in this build.
+Language Immersion Tracker has no advertising SDK and no payment integration. It does not sell, rent, or share tracker data with third parties. The dashboard and popup read the same data directly from extension storage. The extension's optional account and cloud-sync feature and its optional product analytics are each described in their own sections below. Both are off unless the user turns them on, and each is controlled independently of the other.
 
 ## Optional account and cloud sync
 
