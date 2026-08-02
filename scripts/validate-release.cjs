@@ -66,6 +66,12 @@ assert(privacy.includes("cannot be linked to a person, a device, or to other eve
   "analytics anonymity guarantee wording changed unexpectedly - this must stay true of the actual event payload, not just the policy text");
 assert(privacy.includes("permanently delete your account") && !privacy.includes("self-service account deletion is planned but not yet available"),
   "account-deletion privacy disclosure must describe self-service deletion, not the old support-only wording, once the feature ships");
+// A "not yet enabled/available in this build" line survived in the Storage and
+// sharing section for two releases after analytics actually shipped, directly
+// contradicting the Optional product analytics section further down. Any
+// pending-feature wording must be removed in the same commit that ships it.
+assert(!/not yet (enabled|available|active|implemented)/i.test(privacy),
+  "PRIVACY.md still describes a feature as not yet shipped - remove that wording when the feature ships, or the policy contradicts itself");
 const background = read("background.js");
 assert(background.includes('message.type === "cloudDeleteAccount"'),
   "PRIVACY.md promises self-service account deletion but background.js has no handler for it");
