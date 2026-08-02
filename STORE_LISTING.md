@@ -61,13 +61,14 @@ Host `PRIVACY.md` at a stable public HTTPS URL and place that URL in the Develop
 6. Open the popup's Manual tab to test the persistent timer and a completed entry.
 7. Use Tracker Settings to test Fully manual counting, the analytics consent toggle (confirm it is off by default and independent of cloud sync), the goal contribution/detail choices, Light and Dark modes, notifications, backups, Chrome Sync, and the tutorial.
 8. Open Account & Plan and optionally create a free account to confirm sign-in and cloud sync are optional, clearly labelled, and never required for local tracking.
+9. Open the full dashboard's Account, Plan & Data section while signed in and confirm a "Delete account" control is present, requires confirmation, and (if exercised) removes the account without affecting local tracking history on that device.
 
 ## Publisher checklist
 
 - Register the dedicated publisher Google account and enable two-step verification.
 - Choose a publisher name and verify a frequently monitored contact email.
 - Declare Trader or Non-Trader accurately; EU trader information may be displayed publicly.
-- Upload `release/Language-Immersion-Tracker-1.9.3.zip` (cloud- and analytics-enabled build: Supabase host permission and production `config/cloud-config.json` included - see `release/RELEASE_CHECKLIST.md`).
+- Upload `release/Language-Immersion-Tracker-1.9.4.zip` (cloud- and analytics-enabled build with self-service account deletion: Supabase host permission and production `config/cloud-config.json` included - see `release/RELEASE_CHECKLIST.md`).
 - Do not include a manifest `key` in the Chrome Web Store package. Chrome Web Store assigns and maintains the published extension ID.
 - Provide at least one real 1280x800 or 640x400 product screenshot and a 440x280 promotional image.
 - Complete the Store listing, Privacy practices, Distribution, and Test instructions tabs.

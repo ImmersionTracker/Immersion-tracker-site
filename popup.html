@@ -174,7 +174,7 @@
   </dialog>
 
   <dialog id="onboardingDialog" class="onboarding-dialog" aria-labelledby="onboardingTitle">
-    <div class="onboarding-progress"><span id="onboardingStepLabel">Step 1 of 5</span><button id="skipOnboardingButton" class="link-button">Set up later</button></div>
+    <div class="onboarding-progress"><span id="onboardingStepLabel">Step 1 of 6</span><button id="skipOnboardingButton" class="link-button">Set up later</button></div>
     <section class="onboarding-step" data-onboarding-step="0">
       <div class="onboarding-mark">LI</div><div class="eyebrow">Welcome</div><h2 id="onboardingTitle">Set up your immersion tracker</h2>
       <p>Choose what you are learning and set goals that fit your routine. You can change everything later.</p>
@@ -206,6 +206,11 @@
       <div class="eyebrow">How tracking works</div><h2>Only target-language audio counts</h2>
       <ul class="onboarding-rules"><li>Streaming subtitles never count as proof of spoken language.</li><li>If a site hides its selected audio, confirm the current video. After two matching confirmations, the tracker can offer to remember strongly related videos.</li><li>Fully manual language mode can count every supported video when you prefer to manage the language yourself.</li><li>Active time means you are using the browser; passive time means the video continues while you are away.</li></ul>
       <p class="secondary-text">After setup, a short tour will point out the main controls.</p>
+    </section>
+    <section class="onboarding-step hidden" data-onboarding-step="5">
+      <div class="eyebrow">Optional</div><h2>Help improve this extension?</h2>
+      <label class="check-label"><input id="onboardingAnalyticsConsent" type="checkbox"> Share anonymous usage analytics</label>
+      <p class="secondary-text">Off unless you turn it on here (or later in Tracker Settings), and always separate from cloud sync. If turned on, only your target language, platform (e.g. YouTube or Netflix), active/passive duration, broad content type, date, and extension version are sent &mdash; never titles, URLs, searches, subtitles, page text, or anything that identifies you or this device. See the privacy policy for details.</p>
     </section>
     <div id="onboardingStatus" class="form-status"></div>
     <div class="onboarding-actions"><button id="onboardingBackButton">Back</button><button id="onboardingNextButton" class="primary">Get started</button></div>

@@ -104,13 +104,13 @@ async function assertPopupPairsAlign(page, pairs, label) {
     await page.locator("#onboardingDialog[open]").waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       "the added account control must not overflow the popup header");
-    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 1 of 5");
+    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 1 of 6");
     await page.locator("#onboardingNextButton").click();
-    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 2 of 5");
+    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 2 of 6");
     await page.locator("#onboardingChooseLater").click();
-    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 3 of 5");
+    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 3 of 6");
     await page.locator("#onboardingNextButton").click();
-    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 4 of 5");
+    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 4 of 6");
     assert(await page.locator("#onboardingDialog").getByText("Multi-language planned").isVisible());
     assert(await page.locator("#onboardingDialog").getByText("No payment or login is required yet.").isVisible());
     const comparisonFits = await page.locator(".onboarding-plan-comparison").evaluate(element =>
@@ -118,7 +118,13 @@ async function assertPopupPairsAlign(page, pairs, label) {
     );
     assert(comparisonFits, "onboarding plan comparison should fit the popup");
     await page.locator("#onboardingNextButton").click();
-    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 5 of 5");
+    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 5 of 6");
+    await page.locator("#onboardingNextButton").click();
+    assert.equal(await page.locator("#onboardingStepLabel").textContent(), "Step 6 of 6");
+    assert(await page.locator("#onboardingDialog").getByText("Share anonymous usage analytics").isVisible());
+    assert.equal(await page.locator("#onboardingAnalyticsConsent").isChecked(), false,
+      "analytics consent must default to unchecked in onboarding, matching off-by-default everywhere else");
+    assert.equal(await page.locator("#onboardingNextButton").textContent(), "Save and take tour");
 
     await page.goto(`http://127.0.0.1:${port}/popup.html`, { waitUntil: "networkidle" });
     const popupSize = await page.evaluate(() => ({ width: document.documentElement.offsetWidth, height: document.documentElement.offsetHeight }));
@@ -127,7 +133,7 @@ async function assertPopupPairsAlign(page, pairs, label) {
     await page.locator("#accountInfoDialog[open]").waitFor();
     assert(await page.locator("#accountInfoDialog").evaluate(element => element.scrollWidth <= element.clientWidth),
       "account and plan comparison should fit the dialog");
-    assert(await page.getByText("No login is required in this version.").isVisible());
+    assert(await page.getByText("Signing in is optional and never required.").isVisible());
     assert(await page.getByText("Switching your active language never deletes earlier language data.").isVisible());
     await page.locator("#accountInfoDialog [data-close-dialog]").click();
     await page.locator("#targetLanguageSelect").selectOption("sv");

@@ -731,14 +731,14 @@ async function render() {
 }
 
 function setOnboardingStep(nextStep) {
-  onboardingStep = Math.max(0, Math.min(4, nextStep));
+  onboardingStep = Math.max(0, Math.min(5, nextStep));
   document.querySelectorAll("[data-onboarding-step]").forEach((section) => {
     section.classList.toggle("hidden", Number(section.dataset.onboardingStep) !== onboardingStep);
   });
-  document.getElementById("onboardingStepLabel").textContent = "Step " + (onboardingStep + 1) + " of 5";
+  document.getElementById("onboardingStepLabel").textContent = "Step " + (onboardingStep + 1) + " of 6";
   document.getElementById("onboardingBackButton").disabled = onboardingStep === 0;
   document.getElementById("onboardingNextButton").textContent =
-    onboardingStep === 0 ? "Get started" : onboardingStep === 4 ? "Save and take tour" : "Next";
+    onboardingStep === 0 ? "Get started" : onboardingStep === 5 ? "Save and take tour" : "Next";
   document.getElementById("onboardingStatus").textContent = "";
 }
 
@@ -762,6 +762,7 @@ function openOnboardingSetup(preferences = {}) {
   document.getElementById("onboardingDailyGoal").value = preferences.goals?.daily?.minutes || 60;
   document.getElementById("onboardingWeeklyGoal").value = preferences.goals?.weekly?.minutes || 420;
   document.getElementById("onboardingNotifications").checked = preferences.notificationsEnabled !== false;
+  document.getElementById("onboardingAnalyticsConsent").checked = preferences.analyticsConsent === true;
   updateOnboardingCustomLanguage();
   setOnboardingStep(0);
   const dialog = document.getElementById("onboardingDialog");
@@ -821,7 +822,10 @@ async function completeOnboarding({ saveSetup = true } = {}) {
     type: "setPreferences",
     preferences: {
       onboardingCompleted: true,
-      ...(saveSetup ? { notificationsEnabled: document.getElementById("onboardingNotifications").checked } : {})
+      ...(saveSetup ? {
+        notificationsEnabled: document.getElementById("onboardingNotifications").checked,
+        analyticsConsent: document.getElementById("onboardingAnalyticsConsent").checked
+      } : {})
     }
   });
   if (!preferencesResponse?.ok) {
@@ -1660,7 +1664,7 @@ document.getElementById("onboardingChooseLater").addEventListener("click", () =>
 });
 document.getElementById("onboardingBackButton").addEventListener("click", () => setOnboardingStep(onboardingStep - 1));
 document.getElementById("onboardingNextButton").addEventListener("click", () => {
-  if (onboardingStep < 4) setOnboardingStep(onboardingStep + 1);
+  if (onboardingStep < 5) setOnboardingStep(onboardingStep + 1);
   else completeOnboarding();
 });
 document.getElementById("skipOnboardingButton").addEventListener("click", () => completeOnboarding({ saveSetup: false }));

@@ -43,7 +43,9 @@ for (const required of [
   "supabase/migrations/0001_cloud_foundation.sql",
   "supabase/tests/rls-checklist.md",
   "supabase/migrations/0002_analytics_events.sql",
-  "supabase/tests/analytics-rls-checklist.md"
+  "supabase/tests/analytics-rls-checklist.md",
+  "supabase/migrations/0003_self_account_deletion.sql",
+  "supabase/tests/self-deletion-checklist.md"
 ]) assert(fs.existsSync(path.join(root, required)), `missing release document: ${required}`);
 
 const readme = read("README.md");
@@ -62,6 +64,11 @@ assert(privacy.includes("Optional product analytics") && privacy.includes("off b
   "analytics privacy disclosure changed unexpectedly - update deliberately together with the actual consent toggle and event-shaping code if this changes");
 assert(privacy.includes("cannot be linked to a person, a device, or to other events from the same install"),
   "analytics anonymity guarantee wording changed unexpectedly - this must stay true of the actual event payload, not just the policy text");
+assert(privacy.includes("permanently delete your account") && !privacy.includes("self-service account deletion is planned but not yet available"),
+  "account-deletion privacy disclosure must describe self-service deletion, not the old support-only wording, once the feature ships");
+const background = read("background.js");
+assert(background.includes('message.type === "cloudDeleteAccount"'),
+  "PRIVACY.md promises self-service account deletion but background.js has no handler for it");
 
 const output = path.join(root, "store-assets", "output");
 const screenshots = [

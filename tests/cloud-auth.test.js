@@ -195,7 +195,10 @@ async function run() {
       : { status: 403, json: { error_code: "otp_expired", msg: "Token has expired or is invalid" } },
     "PUT /auth/v1/user": (body, headers) => headers.Authorization === "Bearer access-token-1" && body.password.length >= 8
       ? { status: 200, json: { id: "123e4567-e89b-42d3-a456-426614174000" } }
-      : { status: 401, json: { msg: "Invalid token" } }
+      : { status: 401, json: { msg: "Invalid token" } },
+    "POST /rest/v1/rpc/tracker_delete_my_account": (body, headers) => headers.Authorization === "Bearer access-token-1"
+      ? { status: 204, json: null }
+      : { status: 401, json: { message: "JWT expired" } }
   };
 
   const { chrome: chromeMock, messageListeners, local } = buildChromeMock();
@@ -263,6 +266,20 @@ async function run() {
   const goodConfirm = await call("cloudConfirmPasswordReset", { email: "melis@example.com", code: "654321", newPassword: "new-password-1" });
   assert.equal(goodConfirm.ok, true);
   assert.equal(goodConfirm.account.status, "authenticated");
+
+  // 11. Delete account: calls the self-deletion RPC (never a service-role
+  // key - see supabase/migrations/0003_self_account_deletion.sql) and
+  // clears the local session the same way sign-out does.
+  const deleteAccount = await call("cloudDeleteAccount");
+  assert.equal(deleteAccount.ok, true, JSON.stringify(deleteAccount));
+  assert.equal(deleteAccount.account.status, "guest");
+  const afterDelete = await local.get("japaneseImmersionTrackerAccountSessionV1");
+  assert.equal(afterDelete.japaneseImmersionTrackerAccountSessionV1, undefined, "deleting the account must clear the local session");
+
+  // 12. Delete account: calling it again while signed out is a clean error, not a crash.
+  const deleteAgain = await call("cloudDeleteAccount");
+  assert.equal(deleteAgain.ok, false);
+  assert.equal(deleteAgain.error.code, "not-signed-in");
 
   console.log("Cloud auth wiring checks passed.");
 }

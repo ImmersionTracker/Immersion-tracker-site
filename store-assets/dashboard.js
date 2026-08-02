@@ -624,6 +624,7 @@ function renderAccountCard() {
   const summary = document.getElementById("dashboardAccountSummary");
   const status = document.getElementById("dashboardAccountStatus");
   const signOutButton = document.getElementById("dashboardSignOutButton");
+  const deleteButton = document.getElementById("dashboardDeleteAccountButton");
   const signedIn = Boolean(latestAccountState?.account?.connected);
   if (summary) {
     summary.textContent = signedIn
@@ -640,6 +641,7 @@ function renderAccountCard() {
           : "Not signed in.";
   }
   if (signOutButton) signOutButton.hidden = !signedIn;
+  if (deleteButton) deleteButton.hidden = !signedIn;
 }
 
 async function refreshAccountState() {
@@ -783,6 +785,13 @@ document.getElementById("dashboardProfile").addEventListener("click", () => {
 });
 document.getElementById("dashboardSignOutButton").addEventListener("click", async () => {
   await sendMessage({ type: "cloudSignOut" });
+  await refreshAccountState();
+});
+document.getElementById("dashboardDeleteAccountButton").addEventListener("click", async () => {
+  if (!extensionApi) { setStatus("Demo mode: install or reload the extension to manage your account.", true); return; }
+  if (!confirm("Permanently delete your account and everything stored in cloud sync? Your local tracking history on this device is not affected, but the account itself cannot be recovered.")) return;
+  const response = await sendMessage({ type: "cloudDeleteAccount" });
+  setStatus(response?.ok ? "Account deleted." : (response?.error?.message || "Could not delete your account."), !response?.ok);
   await refreshAccountState();
 });
 document.getElementById("dashboardExportJson").addEventListener("click", async () => {

@@ -1802,6 +1802,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Permanently deletes the signed-in account server-side via the
+  // security-definer tracker_delete_my_account() RPC (never a service-role
+  // key - see supabase/migrations/0003_self_account_deletion.sql), then
+  // clears the local session the same way cloudSignOut does. Local tracking
+  // history is never touched: this only ever removes the account and its
+  // cloud-mirrored rows.
+  if (message.type === "cloudDeleteAccount") {
+    (async () => {
+      try {
+        const session = await getAccountSession();
+        if (!session?.accessToken) {
+          sendResponse({ ok: false, error: { code: "not-signed-in", message: "You're not signed in." } });
+          return;
+        }
+        const config = await getCloudConfig();
+        if (!config.enabled) {
+          sendResponse({ ok: false, error: { code: "cloud-disabled", message: "Cloud sync isn't set up yet." } });
+          return;
+        }
+        const request = TrackerSupabaseRest.buildDeleteAccountRequest(config, { accessToken: session.accessToken });
+        const { ok, json } = await fetchJson(request);
+        if (!ok) {
+          sendResponse({ ok: false, error: { code: "delete-failed", message: TrackerSupabaseRest.describeRestError(json, "Could not delete your account.") } });
+          return;
+        }
+        await clearAccountSession();
+        sendResponse({ ok: true, account: TrackerAccountState.publicSummary(TrackerAccountState.guest()) });
+      } catch (error) {
+        sendResponse({ ok: false, error: { code: "delete-failed", message: String(error?.message || "Could not delete your account.") } });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === "cloudRequestPasswordReset") {
     (async () => {
       try {

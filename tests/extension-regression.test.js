@@ -18,7 +18,7 @@ function values(source, expression) {
 }
 
 function testManifestAndMessageContracts() {
-  assert.equal(manifest.version, "1.9.3", "release version changed unexpectedly");
+  assert.equal(manifest.version, "1.9.4", "release version changed unexpectedly");
   assert(manifest.permissions.includes("unlimitedStorage"), "long-term local history needs unlimited storage");
   assert(background.includes('setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })'),
     "local and synced tracker data should not be directly exposed to content scripts");
@@ -368,11 +368,27 @@ function testDashboardAccess() {
     "dashboard should update while it remains open");
   assert(dashboardHtml.includes('id="dashboardExportJson"') && dashboardHtml.includes('id="saveDashboardGoals"'),
     "dashboard live controls are missing");
+  assert(dashboardHtml.includes('id="dashboardDeleteAccountButton"') && dashboardHtml.includes('id="dashboardDeleteAccountButton" class="danger"'),
+    "account deletion must live in the dashboard, styled as a destructive action");
+  assert(!popupHtml.includes('id="dashboardDeleteAccountButton"') && !popupHtml.includes("Delete account"),
+    "account deletion should only be offered from the dashboard, not the popup");
+  assert(dashboard.includes('type: "cloudDeleteAccount"') && dashboard.includes("confirm(") &&
+    dashboard.match(/dashboardDeleteAccountButton[\s\S]{0,400}confirm\(/),
+    "deleting an account must be confirmed before the cloudDeleteAccount message is sent");
+  assert(background.includes('message.type === "cloudDeleteAccount"') &&
+    background.includes("TrackerSupabaseRest.buildDeleteAccountRequest") &&
+    background.includes("await clearAccountSession()"),
+    "background.js must handle cloudDeleteAccount via the self-deletion RPC and clear the local session on success");
 }
 
 function testOnboardingPlansAndLanguageSafety() {
-  assert(popupHtml.includes("Step 1 of 5") && popup.includes('" of 5"'),
-    "onboarding should include the Free/Pro explanation step");
+  assert(popupHtml.includes("Step 1 of 6") && popup.includes('" of 6"'),
+    "onboarding should include the Free/Pro explanation and analytics-consent steps");
+  assert(popupHtml.includes('id="onboardingAnalyticsConsent"') && popupHtml.includes("Share anonymous usage analytics") &&
+    popup.includes('analyticsConsent: document.getElementById("onboardingAnalyticsConsent").checked'),
+    "onboarding's last step must offer analytics consent and save it only when setup isn't skipped");
+  assert(!popupHtml.includes('id="onboardingAnalyticsConsent" type="checkbox" checked'),
+    "the onboarding analytics checkbox must default to unchecked - opt-in, not opt-out");
   assert(popupHtml.includes('id="onboardingChooseLater"') && popupHtml.includes("Set up later") &&
     popup.includes('{ code: "und", name: "Choose a language" }'),
     "new users need a safe choose-later path instead of silently defaulting tracking");

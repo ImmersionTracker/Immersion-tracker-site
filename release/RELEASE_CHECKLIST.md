@@ -49,3 +49,16 @@ Completed 2026-08-03 against the production Supabase project (`khfizbjmhevmxwtne
 - Confirmed only the seven allowlisted columns exist on the table - no titles, URLs, or other content, and no user/device/session identifier of any kind.
 
 Re-run this verification against the production project if the schema, RLS policies, or upload code paths change.
+
+## Self-service account deletion verification
+
+Completed 2026-08-03 against the production Supabase project (`khfizbjmhevmxwtnekvb`), before self-service deletion was first enabled in a shipped package. Ran all six checks in `supabase/tests/self-deletion-checklist.md` using two real throwaway accounts created via the Auth REST API (the same calls `background.js` makes), each given a device and a daily-totals row first:
+
+- Calling `tracker_delete_my_account()` with the anon key alone (no signed-in user) was rejected outright (`42501 permission denied for function tracker_delete_my_account`) - the function has no execute grant for `anon`, so an unauthenticated call never even reaches the `auth.uid() is null` check inside it.
+- Account A called the function on itself and got a clean success; a follow-up query as `postgres` confirmed its `auth.users`, `tracker_profiles`, `tracker_devices`, and `tracker_daily_totals` rows were all gone (0 remaining in each).
+- Account B (untouched) still had exactly 1 row in `auth.users`, `tracker_profiles`, and `tracker_devices` afterward - deleting one account has no effect on another.
+- `analytics_events` row count was identical before and after (0) - it has no `user_id` column for this deletion to cascade from.
+- Account A's still-unexpired JWT could no longer read (`200` with an empty array, since RLS has nothing left to match against) or write (`403`, RLS policy violation) anything afterward - functionally equivalent to being rejected, even though the token itself doesn't get server-side revoked immediately.
+- Account B was also deleted at the end of this verification so no throwaway accounts were left behind; a final query confirmed 0 matching rows remained in `auth.users` for either test account.
+
+Re-run this verification against the production project if the schema, RLS policies, or this function's body change.
