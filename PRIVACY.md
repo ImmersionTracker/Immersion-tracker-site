@@ -1,6 +1,6 @@
 # Privacy Policy for Language Immersion Tracker
 
-Effective date: August 2, 2026
+Effective date: August 3, 2026
 
 Language Immersion Tracker records active and passive language-immersion time on supported video websites and from entries that the user adds manually. This policy explains the information the extension handles and how it is used.
 
@@ -38,8 +38,6 @@ Complete tracker history and settings are stored in Chrome extension storage on 
 Language Immersion Tracker has no advertising SDK and no payment integration. It does not sell, rent, or share tracker data with third parties. The dashboard and popup read the same data directly from extension storage. The extension's optional account and cloud-sync feature is described in its own section below; product analytics is described there too and is not yet enabled in this build.
 
 ## Optional account and cloud sync
-
-**This capability is not enabled in the currently published version.** The extension's code supports it, but the published package does not include Supabase server credentials or network access to Supabase, so any attempt to sign in will show "Cloud sync isn't set up yet." and nothing is sent anywhere. This section documents the feature so it does not need to be written from scratch the day it is turned on; this policy will be republished with an updated effective date at that point.
 
 Signing in is never required. Local tracking, goals, history, and exports work fully without an account, and continue to work exactly the same way if an account is never created, is signed out of, or its free sync trial ends.
 

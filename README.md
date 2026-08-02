@@ -1,8 +1,14 @@
-# Language Immersion Tracker - version 1.9.1
+# Language Immersion Tracker - version 1.9.2
 
 A Chrome Manifest V3 extension for tracking active and passive immersion in any target language. It detects supported video playback on YouTube and major streaming services, provides a persistent manual timer for any source, tracks goals, and keeps each language's totals and remembered video decisions separate.
 
-The published release remains local-only. The extension now contains a real, tested (but not yet live) optional Supabase account and cloud-sync path - sign-in UI, an upload queue, a three-month trial clock - in `lib/account-state.js`, `lib/supabase-auth.js`, `lib/supabase-rest.js`, `lib/cloud-contract.js`, `background.js`, and `supabase/`. It is held back from the published Chrome Web Store package (no bundled credentials, no `https://*.supabase.co/*` host permission) until the RLS checklist in `supabase/tests/rls-checklist.md` has been run against a live project with two real accounts - see `NEXT_PHASE_ROADMAP.md` and `release/RELEASE_CHECKLIST.md`.
+The extension is completely free. It now includes an optional Supabase account and cloud-sync path - sign-in UI, an upload queue, a three-month free sync trial - in `lib/account-state.js`, `lib/supabase-auth.js`, `lib/supabase-rest.js`, `lib/cloud-contract.js`, `background.js`, and `supabase/`. Signing in is never required: local tracking, goals, history, and exports work fully without an account and are unaffected if an account is never created, is signed out of, or its free sync trial ends - only the cloud mirror stops updating. The RLS checklist in `supabase/tests/rls-checklist.md` has been run live against the production Supabase project with two real accounts (see `release/RELEASE_CHECKLIST.md`), so this release ships with the `https://*.supabase.co/*` host permission and cloud sign-in enabled. See `PRIVACY.md` for exactly what cloud sync does and does not send.
+
+## What changed in version 1.9.2
+
+- Verified the full RLS checklist (`supabase/tests/rls-checklist.md`) live against the production Supabase project with two real accounts: cross-account isolation, anon-role lockout, immutable plan/entitlement fields, device/generation-gated uploads, upsert-replaces-not-adds, reset-and-regenerate, and cascading account deletion all passed.
+- Enabled optional Supabase sign-in and cloud sync in the shipped package (host permission and cloud configuration now included; previously held back pending the RLS verification above).
+- Updated `PRIVACY.md` and `STORE_LISTING.md` to describe cloud sync as live rather than pending.
 
 ## What changed in version 1.9.1
 

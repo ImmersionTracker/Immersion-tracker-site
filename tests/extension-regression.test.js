@@ -18,7 +18,7 @@ function values(source, expression) {
 }
 
 function testManifestAndMessageContracts() {
-  assert.equal(manifest.version, "1.9.1", "release version changed unexpectedly");
+  assert.equal(manifest.version, "1.9.2", "release version changed unexpectedly");
   assert(manifest.permissions.includes("unlimitedStorage"), "long-term local history needs unlimited storage");
   assert(background.includes('setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })'),
     "local and synced tracker data should not be directly exposed to content scripts");

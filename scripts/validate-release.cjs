@@ -50,8 +50,10 @@ const privacy = read("PRIVACY.md");
 // edit (and re-reading of this assertion) whenever the underlying disclosure
 // it guards actually changes, rather than letting it drift silently.
 assert(privacy.includes("Optional account and cloud sync"), "cloud-sync privacy disclosure is missing or was renamed unexpectedly");
-assert(privacy.includes("This capability is not enabled in the currently published version"),
-  "cloud-sync 'not enabled yet' disclosure changed unexpectedly - if cloud sync just went live, this assertion, PRIVACY.md, and the manifest host_permissions/config bundling must all be updated together, not separately");
+assert(privacy.includes("Row Level Security") && privacy.includes("never embeds a Supabase service-role key"),
+  "cloud-sync privacy disclosure must keep describing RLS and the no-service-role-key guarantee - update deliberately if the cloud architecture changes");
+assert(manifest.host_permissions.includes("https://*.supabase.co/*"),
+  "cloud sync is documented as live in PRIVACY.md but the Supabase host permission is missing from manifest.json");
 assert(privacy.includes("no advertising SDK and no payment integration"), "advertising/payment privacy disclosure changed unexpectedly");
 assert(privacy.includes("Optional product analytics") && privacy.includes("not yet enabled in this build"),
   "analytics privacy disclosure changed unexpectedly - if analytics was just turned on, this assertion (and the policy text) must be updated deliberately, not left stale");
