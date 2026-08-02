@@ -344,8 +344,14 @@ function testDashboardAccess() {
   assert(background.includes('command === "open-dashboard"') &&
     background.includes('chrome.runtime.getURL("store-assets/dashboard.html")'),
     "dashboard shortcut is not handled by the background worker");
-  assert(!popup.includes("paypal.me") && !popupHtml.includes("PayPal"),
-    "PayPal support UI should be removed");
+  assert(popupHtml.includes('href="https://paypal.me/ImmersionTrack"') && popupHtml.includes('id="donateButton"'),
+    "header Donate button is missing or does not link to the project's PayPal.Me page");
+  assert(popupHtml.includes('aria-label="Donate"') || popupHtml.includes(">Donate<") || popupHtml.includes(">Donate&mdash;") || popupHtml.includes("Donate &mdash;"),
+    "Donate control must be clearly labelled \"Donate\"");
+  assert(popupHtml.includes('id="accountDonateButton"') && popupHtml.includes('id="accountInfoDialog"'),
+    "Account & Plan panel is missing its Donate row");
+  assert(dashboardHtml.includes('href="https://paypal.me/ImmersionTrack"') && dashboardHtml.includes('id="dashboardDonateButton"') && dashboardHtml.includes('aria-label="Donate"'),
+    "dashboard is missing a clearly labelled Donate button");
   assert.equal(manifest.options_page, "store-assets/dashboard.html");
   for (const contract of ["getDashboard", "setPreferences", "setGoals", "setTargetLanguage", "exportData", "importData", "resetAllData"]) {
     assert(dashboard.includes(`type: "${contract}"`), `dashboard is not connected to ${contract}`);

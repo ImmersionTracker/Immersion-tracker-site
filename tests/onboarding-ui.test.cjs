@@ -176,10 +176,6 @@ async function assertPopupPairsAlign(page, pairs, label) {
         };
       });
       assert(secondRow.bottomDifference <= 1 && secondRow.historyOverflow === "auto" && secondRow.historyHeightChange <= 1 && secondRow.historyScrollable, `popup insights ${theme}: source and History cards must share a bottom edge, and History must keep a fixed size while ten rows scroll: ${JSON.stringify(secondRow)}`);
-      if (process.env.POPUP_INSIGHTS_AUDIT && theme === "dark") {
-        await page.evaluate(() => { document.body.scrollTop = document.body.scrollHeight; });
-        await page.screenshot({ path: process.env.POPUP_INSIGHTS_AUDIT, type: "png" });
-      }
       const emptyChart = await page.evaluate(() => {
         renderInsights({ ...window.__mockState, records: {} });
         const chart = document.getElementById("weeklyChart");

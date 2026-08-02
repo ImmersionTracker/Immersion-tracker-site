@@ -6,6 +6,7 @@ let goalsInitialized = false;
 let languageInitialized = false;
 let manualFieldsInitialized = false;
 let selectedGoalPeriod = "daily";
+let ringSegments = [];
 let latestGoalPeriods = {};
 let categoryOptionsSignature = "";
 let customCategoryTargetId = "manualSource";
@@ -394,6 +395,14 @@ function renderSelectedGoalPeriod() {
     : formatGoalMinutes(Math.max(0, targetMinutes - currentMinutes)) + " remaining";
   document.getElementById("goalActiveValue").textContent = formatGoalMinutes(period.active / 60);
   document.getElementById("goalPassiveValue").textContent = formatGoalMinutes(period.passive / 60);
+  document.getElementById("goalRemainingValue").textContent = totalSeconds >= targetSeconds
+    ? "0m"
+    : formatGoalMinutes(Math.max(0, targetMinutes - currentMinutes));
+  ringSegments = [
+    { start: 0, end: activeAngle, className: "active", label: "Active " + formatGoalMinutes(period.active / 60) },
+    { start: activeAngle, end: passiveAngle, className: "passive", label: "Passive " + formatGoalMinutes(period.passive / 60) },
+    { start: passiveAngle, end: 360, className: "remaining", label: totalSeconds >= targetSeconds ? "Goal complete" : "Remaining " + formatGoalMinutes(Math.max(0, targetMinutes - currentMinutes)) }
+  ];
   document.getElementById("goalCountingCaption").textContent = countingMode === "active"
     ? "Only active time counts toward this goal."
     : "Active and passive time count toward this goal.";
@@ -773,7 +782,7 @@ function onboardingLanguageChoice() {
 async function completeOnboarding({ saveSetup = true } = {}) {
   const status = document.getElementById("onboardingStatus");
   const targetLanguage = onboardingLanguageChoice();
-  if (saveSetup && (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(targetLanguage.code) || !targetLanguage.name)) {
+  if (saveSetup && (targetLanguage.code !== "auto" && !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(targetLanguage.code) || !targetLanguage.name)) {
     setOnboardingStep(1);
     status.textContent = "Enter a language name and a valid code such as ja, sv, es, or pt-BR.";
     return;
@@ -951,7 +960,7 @@ document.getElementById("saveLanguageButton").addEventListener("click", async ()
     ? document.getElementById("customLanguageName").value
     : select.selectedOptions[0]?.textContent || code.toUpperCase()).trim();
   const status = document.getElementById("languageStatus");
-  if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(code) || !name) {
+  if ((code !== "auto" && !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(code)) || !name) {
     status.textContent = "Enter a language name and a valid code such as ja, sv, es, or pt-BR.";
     return;
   }
@@ -1221,6 +1230,47 @@ document.getElementById("syncButton").addEventListener("click", async () => {
   button.textContent = "Sync now";
 });
 document.getElementById("refreshStorageUsage").addEventListener("click", refreshStorageUsage);
+
+(() => {
+  const ring = document.getElementById("goalProgressRing");
+  const tooltip = document.getElementById("chartTooltip");
+  function angleForEvent(event) {
+    const rect = ring.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let angle = Math.atan2(event.clientX - cx, -(event.clientY - cy)) * (180 / Math.PI);
+    if (angle < 0) angle += 360;
+    return angle;
+  }
+  const show = (event) => {
+    if (!ringSegments.length) return;
+    const angle = angleForEvent(event);
+    const segment = ringSegments.find((entry) => angle >= entry.start && angle < entry.end) || ringSegments[ringSegments.length - 1];
+    if (!segment || segment.start === segment.end) { tooltip.hidden = true; return; }
+    const rect = ring.getBoundingClientRect();
+    tooltip.innerHTML = '<span class="' + segment.className + '"><i></i>' + escapeHtml(segment.label) + "</span>";
+    tooltip.style.left = (rect.left + rect.width / 2) + "px";
+    tooltip.style.top = rect.top + "px";
+    tooltip.hidden = false;
+  };
+  ring.addEventListener("mouseenter", show);
+  ring.addEventListener("mousemove", show);
+  ring.addEventListener("mouseleave", () => { tooltip.hidden = true; });
+})();
+
+document.getElementById("seedRandomDataButton").addEventListener("click", async () => {
+  const button = document.getElementById("seedRandomDataButton");
+  button.disabled = true;
+  button.textContent = "Adding random immersion...";
+  const response = await sendRuntimeMessage({ type: "seedRandomImmersion" });
+  const status = document.getElementById("dataStatus");
+  status.textContent = response?.ok
+    ? "TEST DATA: added immersion for " + response.seededDays + " days (" + response.seededSessions + " History entries)."
+    : "Could not add test data.";
+  button.disabled = false;
+  button.textContent = "Add random immersion (test data)";
+  render();
+});
 
 document.getElementById("resetButton").addEventListener("click", async () => {
   if (!confirm("Reset immersion history, the manual timer, and remembered decisions across synced Chrome devices?")) return;

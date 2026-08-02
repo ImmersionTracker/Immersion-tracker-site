@@ -17,12 +17,23 @@
 
 .pro-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, .78fr); grid-template-rows: 248px 210px; gap: 11px; }
 .pro-grid > .panel { min-height: 0; padding: 14px; }
-.pro-trend svg { display: block; width: 100%; height: 174px; margin-top: 6px; overflow: visible; }
+.pro-trend-body { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; margin-top: 6px; }
+.pro-trend-yaxis { position: relative; width: 64px; height: 174px; color: var(--muted); font-family: var(--font-utility); font-size: var(--dashboard-caption-size); font-variant-numeric: tabular-nums; }
+.pro-trend-yaxis span { position: absolute; right: 0; left: 0; overflow: hidden; text-align: right; transform: translateY(-50%); white-space: nowrap; text-overflow: ellipsis; }
+.pro-trend-canvas-wrap { min-width: 0; }
+.pro-trend-canvas { position: relative; }
+.pro-trend-canvas svg { display: block; width: 100%; height: 174px; overflow: visible; }
+.pro-trend-markers { position: absolute; inset: 0; pointer-events: none; }
+.pro-trend-marker { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border: 1.5px solid var(--surface); border-radius: 50%; pointer-events: auto; cursor: crosshair; }
+.pro-trend-marker.pro-marker-active { background: var(--green); }
+.pro-trend-marker.pro-marker-passive { background: var(--orange); }
 .pro-trend-axis { display: grid; grid-template-columns: repeat(var(--trend-label-count, 3), minmax(0, 1fr)); gap: 8px; margin-top: 3px; color: var(--muted); font-family: var(--font-utility); font-size: var(--dashboard-caption-size); font-variant-numeric: tabular-nums; }
 .pro-trend-axis span { min-width: 0; overflow: hidden; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
 .pro-trend-axis span:first-child { text-align: left; }
 .pro-trend-axis span:last-child { text-align: right; }
 .pro-gridline { stroke: var(--border); stroke-width: 1; }.pro-area-active { fill: url(#activeFade); }.pro-area-passive { fill: url(#passiveFade); }.pro-line-active { fill: none; stroke: var(--green); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }.pro-line-passive { fill: none; stroke: var(--orange); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }.pro-axis-label { fill: var(--muted); font-size: 9px; }
+.pro-trend-hover { cursor: crosshair; }
+.pro-trend-hover-line { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 
 .pro-source-row { display: grid; grid-template-columns: 75px minmax(0, 1fr) 43px; align-items: center; gap: 8px; width: 100%; min-width: 0; margin-top: 10px; padding: 2px 0; border: 0; background: transparent; color: var(--secondary); text-align: left; font-size: 8px; font-weight: 550; cursor: pointer; }
 .pro-source-row:hover span:first-child { color: var(--text); }.pro-source-row > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.pro-source-row b { overflow: hidden; color: var(--text); font-size: 8px; text-align: right; white-space: nowrap; text-overflow: ellipsis; }

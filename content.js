@@ -75,6 +75,7 @@
   const site = streamingSite?.id || "youtube";
   const isStreamingSite = Boolean(streamingSite);
   let targetLanguage = { code: "ja", name: "Japanese" };
+  let detectedLanguage = null;
 
   let currentVideo = null;
   let currentInfo = null;
@@ -527,6 +528,7 @@
   }
 
   const LANGUAGE_ALIASES = {
+    auto: ["automatic"],
     ja: ["japanese", "\u65e5\u672c\u8a9e"],
     en: ["english"], sv: ["swedish", "svenska"], es: ["spanish", "espanol"],
     fr: ["french", "francais"], de: ["german", "deutsch"], it: ["italian", "italiano"],
@@ -542,7 +544,17 @@
     hr: ["croatian"], sr: ["serbian"], sk: ["slovak"], sl: ["slovenian"],
     et: ["estonian"], lv: ["latvian"], lt: ["lithuanian"], is: ["icelandic"],
     sw: ["swahili", "kiswahili"], ca: ["catalan"], eu: ["basque", "euskara"],
-    gl: ["galician"], cy: ["welsh"], ga: ["irish", "gaeilge"]
+    gl: ["galician"], cy: ["welsh"], ga: ["irish", "gaeilge"],
+    ka: ["georgian", "\u10e5\u10d0\u10e0\u10d7\u10e3\u10da\u10d8"],
+    hy: ["armenian", "\u0570\u0561\u0575\u0565\u0580\u0565\u0576"],
+    am: ["amharic", "\u12a0\u121b\u122d\u129b"],
+    km: ["khmer", "cambodian", "\u1781\u17d2\u1798\u17c2\u179a"],
+    lo: ["lao", "laotian"],
+    my: ["burmese", "myanmar"],
+    ta: ["tamil", "\u0ba4\u0bae\u0bbf\u0bb4\u0bcd"],
+    te: ["telugu", "\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41"],
+    kn: ["kannada", "\u0c95\u0ca8\u0ccd\u0ca8\u0ca1"],
+    ml: ["malayalam", "\u0d2e\u0d32\u0d2f\u0d3e\u0d33\u0d02"]
   };
 
   const ISO3_CODES = {
@@ -559,21 +571,50 @@
     el: /[\u0370-\u03ff]/, he: /[\u0590-\u05ff]/, hi: /[\u0900-\u097f]/,
     bn: /[\u0980-\u09ff]/, th: /[\u0e00-\u0e7f]/, ka: /[\u10a0-\u10ff]/,
     hy: /[\u0530-\u058f]/, am: /[\u1200-\u137f]/, km: /[\u1780-\u17ff]/,
-    lo: /[\u0e80-\u0eff]/, my: /[\u1000-\u109f]/
+    lo: /[\u0e80-\u0eff]/, my: /[\u1000-\u109f]/, ta: /[\u0b80-\u0bff]/,
+    te: /[\u0c00-\u0c7f]/, kn: /[\u0c80-\u0cff]/, ml: /[\u0d00-\u0d7f]/
+  };
+
+  const LANGUAGE_NAMES = {
+    ja: "Japanese", en: "English", sv: "Swedish", es: "Spanish", fr: "French",
+    de: "German", it: "Italian", pt: "Portuguese", ko: "Korean", zh: "Chinese",
+    ru: "Russian", uk: "Ukrainian", ar: "Arabic", hi: "Hindi", tr: "Turkish",
+    pl: "Polish", nl: "Dutch", da: "Danish", no: "Norwegian", fi: "Finnish",
+    vi: "Vietnamese", th: "Thai", id: "Indonesian", ms: "Malay",
+    tl: "Filipino / Tagalog", el: "Greek", he: "Hebrew", fa: "Persian / Farsi",
+    bn: "Bengali", ur: "Urdu", cs: "Czech", ro: "Romanian", hu: "Hungarian",
+    bg: "Bulgarian", hr: "Croatian", sr: "Serbian", sk: "Slovak", sl: "Slovenian",
+    et: "Estonian", lv: "Latvian", lt: "Lithuanian", is: "Icelandic",
+    sw: "Swahili", ca: "Catalan", eu: "Basque", gl: "Galician", cy: "Welsh", ga: "Irish",
+    ka: "Georgian", hy: "Armenian", am: "Amharic", km: "Khmer", lo: "Lao",
+    my: "Burmese", ta: "Tamil", te: "Telugu", kn: "Kannada", ml: "Malayalam"
   };
 
   function normalizeLanguageCode(value) {
     return String(value || "").trim().toLowerCase().replace(/_/g, "-");
   }
 
+  function isAutomaticLanguageMode() {
+    return normalizeLanguageCode(targetLanguage.code) === "auto";
+  }
+
+  function languageFromCode(value) {
+    const code = normalizeLanguageCode(value).split("-")[0];
+    return LANGUAGE_NAMES[code] ? { code, name: LANGUAGE_NAMES[code] } : null;
+  }
+
+  function activeLanguage() {
+    return isAutomaticLanguageMode() && detectedLanguage ? detectedLanguage : targetLanguage;
+  }
+
   function baseTargetCode() {
-    return normalizeLanguageCode(targetLanguage.code).split("-")[0];
+    return normalizeLanguageCode(activeLanguage().code).split("-")[0];
   }
 
   function isTargetLanguageCode(value) {
     const code = normalizeLanguageCode(value);
     if (!code) return false;
-    const targetCode = normalizeLanguageCode(targetLanguage.code);
+    const targetCode = normalizeLanguageCode(activeLanguage().code);
     const base = baseTargetCode();
     return code === targetCode || code.startsWith(targetCode + "-") ||
       code === base || code.startsWith(base + "-") || code === ISO3_CODES[base];
@@ -587,10 +628,25 @@
     return String(value || "").toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   }
 
+  function languageFromLabel(value) {
+    const text = normalizeLabelText(value);
+    if (!text) return null;
+    for (const [code, aliases] of Object.entries(LANGUAGE_ALIASES)) {
+      if (code === "auto") continue;
+      const names = [LANGUAGE_NAMES[code], ...aliases].map(normalizeLabelText).filter(Boolean);
+      if (names.some((name) => text.includes(name))) return { code, name: LANGUAGE_NAMES[code] };
+      if (new RegExp("(^|[\\s(\\[/_-])" + code + "($|[\\s)\\]/_-])", "i").test(text)) {
+        return { code, name: LANGUAGE_NAMES[code] };
+      }
+    }
+    return null;
+  }
+
   function languageLabelMatches(value) {
     const text = normalizeLabelText(value);
     if (!text) return false;
-    const aliases = [targetLanguage.name, ...(LANGUAGE_ALIASES[baseTargetCode()] || [])]
+    const language = activeLanguage();
+    const aliases = [language.name, ...(LANGUAGE_ALIASES[baseTargetCode()] || [])]
       .map(normalizeLabelText).filter(Boolean);
     if (aliases.some((alias) => text.includes(alias))) return true;
     const code = baseTargetCode();
@@ -736,6 +792,18 @@
     const matches = text.match(new RegExp(pattern.source, "gu")) || [];
     const latin = text.match(/[A-Za-z\u00c0-\u024f]/g) || [];
     return matches.length >= 2 && matches.length >= latin.length * 0.5;
+  }
+
+  function languageFromScript(value) {
+    const text = String(value || "").trim();
+    if (!text) return null;
+    let best = null;
+    for (const [code, pattern] of Object.entries(SCRIPT_PATTERNS)) {
+      const matches = text.match(new RegExp(pattern.source, "gu")) || [];
+      if (matches.length < 2) continue;
+      if (!best || matches.length > best.matches) best = { code, matches };
+    }
+    return best ? { code: best.code, name: LANGUAGE_NAMES[best.code] } : null;
   }
 
   function findTargetCommentSignal() {

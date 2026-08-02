@@ -6,13 +6,30 @@ const now = () => extensionApi && !forceDemo ? new Date() : new Date(2026, 7, 28
 let latestDashboard = null;
 let refreshTimer = null;
 let selectedProDays = 30;
+let weekOffset = 0;
+let calendarCursor = now();
+let dailyGoalSegments = [];
+let sourceDonutSegments = [];
+let activityDonutSegments = [];
+
+function weekReference() {
+  return offsetDate(now(), weekOffset * 7);
+}
 
 const LANGUAGE_NAMES = {
+  auto: "Automatic (Pro)",
   ja: "Japanese", en: "English", sv: "Swedish", es: "Spanish", fr: "French",
   de: "German", it: "Italian", pt: "Portuguese", ko: "Korean", zh: "Chinese",
   ru: "Russian", uk: "Ukrainian", ar: "Arabic", hi: "Hindi", tr: "Turkish",
   pl: "Polish", nl: "Dutch", da: "Danish", no: "Norwegian", fi: "Finnish",
-  vi: "Vietnamese", th: "Thai", id: "Indonesian", ms: "Malay"
+  vi: "Vietnamese", th: "Thai", id: "Indonesian", ms: "Malay",
+  tl: "Filipino / Tagalog", el: "Greek", he: "Hebrew", fa: "Persian / Farsi",
+  bn: "Bengali", ur: "Urdu", cs: "Czech", ro: "Romanian", hu: "Hungarian",
+  bg: "Bulgarian", hr: "Croatian", sr: "Serbian", sk: "Slovak", sl: "Slovenian",
+  et: "Estonian", lv: "Latvian", lt: "Lithuanian", is: "Icelandic",
+  sw: "Swahili", ca: "Catalan", eu: "Basque", gl: "Galician", cy: "Welsh", ga: "Irish",
+  ka: "Georgian", hy: "Armenian", am: "Amharic", km: "Khmer", lo: "Lao",
+  my: "Burmese", ta: "Tamil", te: "Telugu", kn: "Kannada", ml: "Malayalam"
 };
 
 function localDateKey(date = now()) {
@@ -139,8 +156,10 @@ function renderStats(state) {
   const yesterday = { active: yesterdayValue.active || 0, passive: yesterdayValue.passive || 0 };
   const todayTotal = recordTotal(today);
   const difference = Math.round((todayTotal - recordTotal(yesterday)) / 60);
-  const keys = weekKeys();
+  const keys = weekKeys(weekReference());
   const week = keys.reduce((sum, key) => sum + recordTotal(records[key]), 0);
+  const currentWeekKeys = weekKeys();
+  const currentWeek = weekOffset === 0 ? week : currentWeekKeys.reduce((sum, key) => sum + recordTotal(records[key]), 0);
   const weekGoalMinutes = Number(goals.weekly?.minutes) || 900;
   const totals = TrackerAnalytics.totals(analyticsRecords);
   const total = totals.active + totals.passive;
@@ -149,11 +168,12 @@ function renderStats(state) {
   setText("todayMetric", formatDuration(todayTotal));
   setText("todayComparison", todayTotal === 0 ? "Start with one focused session" : difference === 0 ? "Same as yesterday" : `${difference > 0 ? "↑" : "↓"} ${Math.abs(difference)} min from yesterday`);
   document.getElementById("todayComparison").classList.toggle("up", difference > 0);
+  setText("weekMetricLabel", weekOffset === 0 ? "This week" : "Selected week");
   setText("weekMetric", formatDuration(week));
-  setText("weekGoalCaption", `of ${formatDuration(weekGoalMinutes * 60)} weekly goal`);
-  document.querySelector(".goal-mini strong").textContent = formatDuration(week);
-  document.querySelector(".goal-mini i").style.width = `${Math.min(100, week / (weekGoalMinutes * 60) * 100)}%`;
-  document.querySelector(".goal-mini span").textContent = `${Math.round(week / (weekGoalMinutes * 60) * 100)}% of weekly goal`;
+  setText("weekGoalCaption", weekOffset === 0 ? `of ${formatDuration(weekGoalMinutes * 60)} weekly goal` : "goal tracking applies to the current week only");
+  document.querySelector(".goal-mini strong").textContent = formatDuration(currentWeek);
+  document.querySelector(".goal-mini i").style.width = `${Math.min(100, currentWeek / (weekGoalMinutes * 60) * 100)}%`;
+  document.querySelector(".goal-mini span").textContent = `${Math.round(currentWeek / (weekGoalMinutes * 60) * 100)}% of weekly goal`;
   setText("streakMetric", `${streak} ${streak === 1 ? "day" : "days"}`);
   setText("streakCaption", streak ? "Keep the momentum going" : "Start immersing today");
   setText("activeRatioMetric", `${total ? Math.round(totals.active / total * 100) : 0}%`);
@@ -171,6 +191,11 @@ function renderStats(state) {
   setText("dailyPassive", formatDuration(today.passive));
   setText("dailyGoalRemaining", counted >= goalSeconds ? "Daily goal complete — excellent work" : `${Math.ceil((goalSeconds - counted) / 60)} minutes to reach today’s goal`);
   document.getElementById("dailyGoalDonut").style.background = `conic-gradient(var(--green) 0 ${activeAngle}deg,var(--orange) ${activeAngle}deg ${passiveAngle}deg,#27364e ${passiveAngle}deg)`;
+  dailyGoalSegments = [
+    { start: 0, end: activeAngle, color: "var(--green)", label: "Active " + formatDuration(today.active) },
+    { start: activeAngle, end: passiveAngle, color: "var(--orange)", label: "Passive " + formatDuration(today.passive) },
+    { start: passiveAngle, end: 360, color: "var(--muted)", label: counted >= goalSeconds ? "Goal complete" : "Remaining " + formatDuration(Math.max(0, goalSeconds - counted)) }
+  ];
 
   setText("chartMax", formatDuration(dailyGoalMinutes * 60));
   setText("chartMid", formatDuration(dailyGoalMinutes * 30));
@@ -181,7 +206,7 @@ function renderStats(state) {
   weeklyChart?.classList.toggle("is-empty", weekIsEmpty);
   weeklyChart?.setAttribute("aria-label", weekIsEmpty
     ? "No weekly immersion recorded yet"
-    : "Active and passive immersion for the current week");
+    : `Active and passive immersion for the ${weekOffset === 0 ? "current" : "selected"} week`);
   const weeklyBarMarkup = keys.map((key, index) => {
     const record = records[key] || {};
     const active = Number(record.active) || 0;
@@ -199,9 +224,14 @@ function renderStats(state) {
 }
 
 function renderCalendar(records, dailyGoalMinutes, weeklyGoalMinutes, activeOnly, streak) {
-  const reference = now();
+  const reference = calendarCursor;
+  const current = now();
   setText("calendarMonth", reference.toLocaleDateString([], { month: "long", year: "numeric" }));
   setText("calendarStreak", `${streak} day streak${streak ? " 🔥" : ""}`);
+  const nextMonthButton = document.getElementById("calendarNextMonth");
+  if (nextMonthButton) {
+    nextMonthButton.disabled = reference.getFullYear() === current.getFullYear() && reference.getMonth() === current.getMonth();
+  }
   const first = new Date(reference.getFullYear(), reference.getMonth(), 1);
   const offset = first.getDay() === 0 ? 6 : first.getDay() - 1;
   const daysInMonth = new Date(reference.getFullYear(), reference.getMonth() + 1, 0).getDate();
@@ -222,15 +252,21 @@ function renderCalendar(records, dailyGoalMinutes, weeklyGoalMinutes, activeOnly
     ).reduce((sum, seconds) => sum + seconds, 0);
     const goalHit = countedTotal >= dailyGoalSeconds;
     const weekHit = weekTotal >= Math.max(60, weeklyGoalMinutes * 60);
+    const isToday = key === localDateKey();
     const classes = [
       intensity ? `level-${intensity}` : "",
       recordedTotal ? "has-time" : "",
       goalHit ? "daily-complete" : "",
       weekHit ? "week-complete" : "",
-      key === localDateKey() ? "today" : ""
+      isToday ? "today" : ""
     ].filter(Boolean).join(" ");
-    const label = `${date.toLocaleDateString([], { month: "long", day: "numeric" })}: ${recordedTotal ? formatDuration(recordedTotal) : "No immersion"}${goalHit ? ", daily goal met" : ""}${weekHit ? ", weekly goal met" : ""}${key === localDateKey() ? ", today" : ""}`;
-    return `<div class="${classes}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${day}</div>`;
+    const dateLabel = date.toLocaleDateString([], { month: "long", day: "numeric" });
+    const detailParts = [recordedTotal ? formatDuration(recordedTotal) : "No immersion"];
+    if (goalHit) detailParts.push("daily goal met");
+    if (weekHit) detailParts.push("weekly goal met");
+    if (isToday) detailParts.push("today");
+    const detailLabel = detailParts.join(", ");
+    return `<div class="${classes}" data-date="${escapeHtml(dateLabel)}" data-detail="${escapeHtml(detailLabel)}" aria-label="${escapeHtml(dateLabel + ": " + detailLabel)}">${day}</div>`;
   }).join("");
 }
 
@@ -244,12 +280,18 @@ function renderHistory(state) {
   const visibleSources = sources.slice(0, 5);
   const sourceStops = [];
   let sourceCursor = 0;
-  visibleSources.forEach(([, seconds], index) => {
-    const end = sourceCursor + (allTime ? seconds / allTime * 100 : 0);
+  sourceDonutSegments = [];
+  visibleSources.forEach(([name, seconds], index) => {
+    const share = allTime ? seconds / allTime * 100 : 0;
+    const end = sourceCursor + share;
     sourceStops.push(`${sourcePalette[index]} ${sourceCursor.toFixed(2)}% ${end.toFixed(2)}%`);
+    sourceDonutSegments.push({ start: sourceCursor / 100 * 360, end: end / 100 * 360, color: sourcePalette[index], label: `${sourceLabel(name)} — ${Math.round(share)}%` });
     sourceCursor = end;
   });
-  if (sourceCursor < 100) sourceStops.push(`var(--surface-3) ${sourceCursor.toFixed(2)}% 100%`);
+  if (sourceCursor < 100) {
+    sourceStops.push(`var(--surface-3) ${sourceCursor.toFixed(2)}% 100%`);
+    sourceDonutSegments.push({ start: sourceCursor / 100 * 360, end: 360, color: "var(--surface-3)", label: "Other sources" });
+  }
   document.getElementById("sourceDonut").style.background = `conic-gradient(${sourceStops.length ? sourceStops.join(",") : "var(--surface-3) 0 100%"})`;
   setText("topSourceName", visibleSources.length ? sourceLabel(visibleSources[0][0]) : "No data");
   setText("topSourceTime", visibleSources.length ? formatDuration(visibleSources[0][1]) : "0m");
@@ -271,6 +313,13 @@ function renderHistory(state) {
   document.getElementById("activityMix").innerHTML = Object.entries(percentages).map(([name, percent]) => `<li><i class="${colors[name]}"></i>${name}<b>${percent}%</b></li>`).join("");
   const stops = [percentages.Watching, percentages.Watching + percentages.Listening, percentages.Watching + percentages.Listening + percentages.Reading];
   document.getElementById("activityDonut").style.background = `conic-gradient(var(--green) 0 ${stops[0]}%,var(--blue) ${stops[0]}% ${stops[1]}%,var(--purple) ${stops[1]}% ${stops[2]}%,var(--orange) ${stops[2]}% 100%)`;
+  const activityBoundaries = [0, stops[0], stops[1], stops[2], 100];
+  activityDonutSegments = ["Watching", "Listening", "Reading", "Other"].map((name, index) => ({
+    start: activityBoundaries[index] / 100 * 360,
+    end: activityBoundaries[index + 1] / 100 * 360,
+    color: `var(--${colors[name]})`,
+    label: `${name} — ${percentages[name]}%`
+  }));
 
   const sessions = Object.values(state.sessions || {}).filter(session => (session.languageCode || "ja") === code).sort((a, b) => (Number(b.lastAt) || 0) - (Number(a.lastAt) || 0)).slice(0, 5);
   document.getElementById("sessions").innerHTML = sessions.length ? sessions.map(session => {
@@ -321,9 +370,57 @@ function svgPath(values, key, width, height, maximum) {
   }).join(" ");
 }
 
+function trendRangeLabel(value) {
+  const start = dateFromKey(value.startKey).toLocaleDateString([], { month: "short", day: "numeric" });
+  if (value.startKey === value.endKey) return start;
+  const end = dateFromKey(value.endKey).toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${start} – ${end}`;
+}
+
+function showChartTooltip(anchorRect, html) {
+  const tooltip = document.getElementById("chartTooltip");
+  if (!tooltip) return;
+  tooltip.innerHTML = html;
+  tooltip.hidden = false;
+  tooltip.style.left = `${anchorRect.left + anchorRect.width / 2}px`;
+  tooltip.style.top = `${anchorRect.top}px`;
+}
+
+function hideChartTooltip() {
+  const tooltip = document.getElementById("chartTooltip");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function angleForPointerEvent(event, element) {
+  const rect = element.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  let angle = Math.atan2(event.clientX - cx, -(event.clientY - cy)) * (180 / Math.PI);
+  if (angle < 0) angle += 360;
+  return angle;
+}
+
+function wireSegmentDonut(elementId, getSegments) {
+  const element = document.getElementById(elementId);
+  if (!element) return;
+  const show = (event) => {
+    const segments = getSegments();
+    if (!segments || !segments.length) { hideChartTooltip(); return; }
+    const angle = angleForPointerEvent(event, element);
+    const segment = segments.find((entry) => angle >= entry.start && angle < entry.end) || segments[segments.length - 1];
+    if (!segment || segment.start === segment.end) { hideChartTooltip(); return; }
+    showChartTooltip(element.getBoundingClientRect(), `<span><i style="background:${segment.color}"></i>${escapeHtml(segment.label)}</span>`);
+  };
+  element.addEventListener("mouseenter", show);
+  element.addEventListener("mousemove", show);
+  element.addEventListener("mouseleave", hideChartTooltip);
+}
+
 function renderProTrend(analysis) {
   const svg = document.getElementById("proTrendChart");
   const axis = document.getElementById("proTrendAxis");
+  const yAxis = document.getElementById("proTrendYAxis");
+  const markerLayer = document.getElementById("proTrendMarkers");
   const values = analysis.trend;
   const width = 640;
   const height = 160;
@@ -334,13 +431,57 @@ function renderProTrend(analysis) {
   const labelIndexes = values.length ? [...new Set(Array.from({ length: labelCount }, (_, index) =>
     Math.round(index / Math.max(1, labelCount - 1) * (values.length - 1))
   ))] : [];
-  svg.innerHTML = `<defs><linearGradient id="activeFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43dc80" stop-opacity=".23"/><stop offset="1" stop-color="#43dc80" stop-opacity="0"/></linearGradient><linearGradient id="passiveFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5a623" stop-opacity=".15"/><stop offset="1" stop-color="#f5a623" stop-opacity="0"/></linearGradient></defs>${[25,65,105,145].map(y => `<line class="pro-gridline" x1="0" x2="640" y1="${y}" y2="${y}"/>`).join("")}${values.length ? `<path class="pro-area-active" d="${activePath} L640,160 L0,160 Z"/><path class="pro-area-passive" d="${passivePath} L640,160 L0,160 Z"/><path class="pro-line-active" d="${activePath}"/><path class="pro-line-passive" d="${passivePath}"/>` : ""}`;
+
+  const points = values.map((value, index) => ({
+    x: values.length === 1 ? width / 2 : index / (values.length - 1) * width,
+    activeY: height - ((Number(value.active) || 0) / maximum * (height - 20)) - 10,
+    passiveY: height - ((Number(value.passive) || 0) / maximum * (height - 20)) - 10,
+    value
+  }));
+  const bucketWidth = values.length > 1 ? width / values.length : width;
+  const hoverZones = points.map((point, index) => {
+    const bucketStart = values.length > 1 ? Math.max(0, point.x - bucketWidth / 2) : 0;
+    return `<rect class="pro-trend-hover" data-index="${index}" x="${bucketStart.toFixed(1)}" y="0" width="${bucketWidth.toFixed(1)}" height="${height}" fill="transparent"></rect>`;
+  }).join("");
+
+  const yTicks = [1, 0.667, 0.333, 0].map((fraction) => ({
+    fraction,
+    y: height - fraction * (height - 20) - 10,
+    seconds: fraction * maximum
+  }));
+
+  svg.innerHTML = `<defs><linearGradient id="activeFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43dc80" stop-opacity=".23"/><stop offset="1" stop-color="#43dc80" stop-opacity="0"/></linearGradient><linearGradient id="passiveFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5a623" stop-opacity=".15"/><stop offset="1" stop-color="#f5a623" stop-opacity="0"/></linearGradient></defs>${yTicks.map(tick => `<line class="pro-gridline" x1="0" x2="640" y1="${tick.y.toFixed(1)}" y2="${tick.y.toFixed(1)}"/>`).join("")}${values.length ? `<path class="pro-area-active" d="${activePath} L640,160 L0,160 Z"/><path class="pro-area-passive" d="${passivePath} L640,160 L0,160 Z"/><path class="pro-line-active" d="${activePath}"/><path class="pro-line-passive" d="${passivePath}"/><line id="proTrendHoverLine" class="pro-trend-hover-line" x1="0" x2="0" y1="0" y2="${height}" hidden></line>${hoverZones}` : ""}`;
+
+  yAxis.innerHTML = yTicks.map(tick => `<span style="top:${(tick.y / height * 100).toFixed(2)}%">${escapeHtml(formatDuration(tick.seconds, true))}</span>`).join("");
+
+  markerLayer.innerHTML = values.length ? points.map(point =>
+    `<i class="pro-trend-marker pro-marker-active" style="left:${(point.x / width * 100).toFixed(2)}%;top:${(point.activeY / height * 100).toFixed(2)}%"></i><i class="pro-trend-marker pro-marker-passive" style="left:${(point.x / width * 100).toFixed(2)}%;top:${(point.passiveY / height * 100).toFixed(2)}%"></i>`
+  ).join("") : "";
+
   axis.style.setProperty("--trend-label-count", String(Math.max(labelIndexes.length, 1)));
   axis.innerHTML = labelIndexes.map((valueIndex, labelIndex) => {
     const value = values[valueIndex];
     const label = labelIndex === labelIndexes.length - 1 ? value.endKey.slice(5) : value.startKey.slice(5);
     return `<span>${escapeHtml(label)}</span>`;
   }).join("");
+
+  if (!values.length) { hideChartTooltip(); return; }
+  const hoverLine = document.getElementById("proTrendHoverLine");
+  const showPoint = (point) => {
+    const svgBox = svg.getBoundingClientRect();
+    const scaleX = svgBox.width / width;
+    hoverLine.hidden = false;
+    hoverLine.setAttribute("x1", point.x.toFixed(1));
+    hoverLine.setAttribute("x2", point.x.toFixed(1));
+    const anchor = { left: svgBox.left + point.x * scaleX, top: svgBox.top, width: 0 };
+    showChartTooltip(anchor, `<b>${escapeHtml(trendRangeLabel(point.value))}</b><span class="active"><i></i>Active ${escapeHtml(formatDuration(point.value.active))}</span><span class="passive"><i></i>Passive ${escapeHtml(formatDuration(point.value.passive))}</span>`);
+  };
+  svg.querySelectorAll(".pro-trend-hover").forEach((zone) => {
+    const point = points[Number(zone.dataset.index)];
+    zone.addEventListener("mouseenter", () => showPoint(point));
+    zone.addEventListener("mousemove", () => showPoint(point));
+    zone.addEventListener("mouseleave", () => { hideChartTooltip(); hoverLine.hidden = true; });
+  });
 }
 
 function openSourceDrawer(source, state) {
@@ -453,10 +594,17 @@ function renderDashboard(dashboard) {
   setText("dashboardProfileMeta", state.preferences?.targetLanguageDeferred === true || target.code === "und"
     ? "Choose a target language"
     : "Local beta profile");
-  const keys = weekKeys();
+  const keys = weekKeys(weekReference());
   const start = dateFromKey(keys[0]);
   const end = dateFromKey(keys[6]);
-  document.querySelector(".date-pill").textContent = `${start.toLocaleDateString([], { month: "short", day: "numeric" })} – ${end.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}　⌄`;
+  const rangeLabel = `${start.toLocaleDateString([], { month: "short", day: "numeric" })} – ${end.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+  const dateRangeButton = document.getElementById("dateRangeButton");
+  if (dateRangeButton) {
+    dateRangeButton.textContent = rangeLabel;
+    dateRangeButton.title = weekOffset === 0 ? "This week" : "Jump back to this week";
+  }
+  const nextWeekButton = document.getElementById("nextWeekButton");
+  if (nextWeekButton) nextWeekButton.disabled = weekOffset >= 0;
   renderStats(state);
   renderHistory(state);
   renderProAnalytics(state);
@@ -501,9 +649,52 @@ function selectView(name) {
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === name));
   document.querySelectorAll("nav button").forEach(button => button.classList.toggle("active", button.dataset.view === name));
   setText("eyebrow", meta[name][0]); setText("title", meta[name][1]);
+  const weekNav = document.querySelector(".week-nav");
+  if (weekNav) weekNav.hidden = name !== "stats";
   history.replaceState(null, "", `?view=${name}`);
 }
 
+wireSegmentDonut("dailyGoalDonut", () => dailyGoalSegments);
+wireSegmentDonut("sourceDonut", () => sourceDonutSegments);
+wireSegmentDonut("activityDonut", () => activityDonutSegments);
+
+document.getElementById("calendarPrevMonth")?.addEventListener("click", () => {
+  calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
+  if (latestDashboard) renderDashboard(latestDashboard);
+});
+document.getElementById("calendarNextMonth")?.addEventListener("click", () => {
+  const candidate = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
+  const currentMonthStart = new Date(now().getFullYear(), now().getMonth(), 1);
+  if (candidate > currentMonthStart) return;
+  calendarCursor = candidate;
+  if (latestDashboard) renderDashboard(latestDashboard);
+});
+
+(() => {
+  const daysContainer = document.getElementById("days");
+  if (!daysContainer) return;
+  daysContainer.addEventListener("mouseover", (event) => {
+    const cell = event.target.closest("[data-date]");
+    if (!cell || !daysContainer.contains(cell)) return;
+    showChartTooltip(cell.getBoundingClientRect(), `<b>${escapeHtml(cell.dataset.date)}</b><span>${escapeHtml(cell.dataset.detail)}</span>`);
+  });
+  daysContainer.addEventListener("mouseout", (event) => {
+    if (!event.relatedTarget || !daysContainer.contains(event.relatedTarget)) hideChartTooltip();
+  });
+})();
+
+document.getElementById("prevWeekButton")?.addEventListener("click", () => {
+  weekOffset -= 1;
+  if (latestDashboard) renderDashboard(latestDashboard);
+});
+document.getElementById("nextWeekButton")?.addEventListener("click", () => {
+  weekOffset = Math.min(0, weekOffset + 1);
+  if (latestDashboard) renderDashboard(latestDashboard);
+});
+document.getElementById("dateRangeButton")?.addEventListener("click", () => {
+  weekOffset = 0;
+  if (latestDashboard) renderDashboard(latestDashboard);
+});
 document.querySelectorAll("nav button").forEach(button => button.addEventListener("click", () => selectView(button.dataset.view)));
 document.querySelectorAll(".period-switch [data-days]").forEach(button => button.addEventListener("click", () => {
   selectedProDays = Number(button.dataset.days) || 30;

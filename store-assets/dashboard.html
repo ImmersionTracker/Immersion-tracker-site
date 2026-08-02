@@ -24,12 +24,12 @@
   </aside>
 
   <main>
-    <header><div><small id="eyebrow">OVERVIEW</small><h1 id="title">Your immersion at a glance</h1></div><div class="date-pill"></div></header>
+    <header><div><small id="eyebrow">OVERVIEW</small><h1 id="title">Your immersion at a glance</h1></div><div class="header-right"><a id="dashboardDonateButton" class="donate-pill" href="https://paypal.me/ImmersionTrack" target="_blank" rel="noopener noreferrer" title="Donate" aria-label="Donate">&#9825; Donate</a><div class="week-nav"><button id="prevWeekButton" class="week-nav-btn" type="button" aria-label="Previous week" title="Previous week">&lsaquo;</button><button id="dateRangeButton" class="date-pill" type="button" aria-label="Jump to current week" title="This week"></button><button id="nextWeekButton" class="week-nav-btn" type="button" aria-label="Next week" title="Next week" disabled>&rsaquo;</button></div></div></header>
 
     <section id="stats" class="view active">
       <div class="metrics">
         <article><span>Today</span><strong id="todayMetric">0m</strong><small id="todayComparison">No time recorded yet</small></article>
-        <article><span>This week</span><strong id="weekMetric">0m</strong><small id="weekGoalCaption">of weekly goal</small></article>
+        <article><span id="weekMetricLabel">This week</span><strong id="weekMetric">0m</strong><small id="weekGoalCaption">of weekly goal</small></article>
         <article><span>Current streak</span><strong id="streakMetric">0 days</strong><small id="streakCaption">Start immersing today</small></article>
         <article><span>Active ratio</span><strong id="activeRatioMetric">0%</strong><small id="activeRatioCaption">0m focused</small></article>
       </div>
@@ -46,7 +46,7 @@
           <p id="dailyGoalRemaining">Start today's immersion</p>
         </article>
         <article class="panel calendar">
-          <div class="panel-title"><div><small>CONSISTENCY</small><h2 id="calendarMonth">This month</h2></div><b id="calendarStreak">0 day streak</b></div>
+          <div class="panel-title"><div><small>CONSISTENCY</small><div class="calendar-title-row"><button id="calendarPrevMonth" class="week-nav-btn" type="button" aria-label="Previous month" title="Previous month">&lsaquo;</button><h2 id="calendarMonth">This month</h2><button id="calendarNextMonth" class="week-nav-btn" type="button" aria-label="Next month" title="Next month" disabled>&rsaquo;</button></div></div><b id="calendarStreak">0 day streak</b></div>
           <div class="weekdays"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
           <div class="days" id="days"></div>
           <div class="calendar-key" aria-label="Calendar status legend">
@@ -91,7 +91,7 @@
           <article><span>Current streak</span><strong id="proStreak">0 days</strong><small id="proStreakCompare">Start immersing today</small></article>
         </div>
         <div class="pro-grid">
-          <article class="panel pro-trend"><div class="panel-title"><div><small>IMMERSION TREND</small><h2>Active and passive time</h2></div><div class="legend"><i class="green"></i>Active <i class="orange"></i>Passive</div></div><svg id="proTrendChart" viewBox="0 0 640 170" preserveAspectRatio="none" aria-label="Immersion trend chart"></svg><div id="proTrendAxis" class="pro-trend-axis" aria-hidden="true"></div></article>
+          <article class="panel pro-trend"><div class="panel-title"><div><small>IMMERSION TREND</small><h2>Active and passive time</h2></div><div class="legend"><i class="green"></i>Active <i class="orange"></i>Passive</div></div><div class="pro-trend-body"><div id="proTrendYAxis" class="pro-trend-yaxis"></div><div class="pro-trend-canvas-wrap"><div class="pro-trend-canvas"><svg id="proTrendChart" viewBox="0 0 640 160" preserveAspectRatio="none" aria-label="Immersion trend chart"></svg><div id="proTrendMarkers" class="pro-trend-markers"></div></div><div id="proTrendAxis" class="pro-trend-axis" aria-hidden="true"></div></div></div></article>
           <article class="panel pro-sources"><div class="panel-title"><div><small>SOURCE COMPARISON</small><h2>Where your time goes</h2></div><b id="proSourceTotal">0m</b></div><div id="proSourceRows"></div></article>
           <article class="panel pro-consistency"><div class="panel-title"><div><small>WEEKLY GOAL CONSISTENCY</small><h2>Recent weeks</h2></div><b id="proGoalRate">0% hit rate</b></div><div id="proWeekBars"></div></article>
           <article class="panel pro-highlights"><div class="panel-title"><div><small>HIGHLIGHTS</small><h2>Your strongest moments</h2></div></div><div id="proHighlights"></div></article>
@@ -118,7 +118,7 @@
         <article class="panel settings-card appearance-card">
           <small>APPEARANCE</small><h2>Make it yours</h2>
           <div class="themes"><button id="dashboardDarkTheme" type="button"><i class="dark-preview"></i><b>Dark</b><span>Easy on the eyes</span></button><button id="dashboardLightTheme" type="button"><i class="light-preview"></i><b>Light</b><span>Bright and clean</span></button></div>
-          <div class="field"><label for="dashboardLanguage">Active target language</label><select id="dashboardLanguage"><option value="ja">Japanese</option><option value="en">English</option><option value="sv">Swedish</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="ko">Korean</option><option value="zh">Chinese</option></select><small class="language-help">Free uses one active language at a time. Switching never deletes earlier data.</small></div>
+          <div class="field"><label for="dashboardLanguage">Active target language</label><select id="dashboardLanguage"><option value="auto">Automatic (Pro)</option><option value="ja">Japanese</option><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="ko">Korean</option><option value="it">Italian</option><option value="zh">Chinese</option><option value="pt">Portuguese</option><option value="hi">Hindi</option><option value="ar">Arabic</option><option value="ru">Russian</option><option value="tr">Turkish</option><option value="nl">Dutch</option><option value="pl">Polish</option><option value="sv">Swedish</option><option value="uk">Ukrainian</option><option value="vi">Vietnamese</option><option value="th">Thai</option><option value="id">Indonesian</option><option value="tl">Filipino / Tagalog</option><option value="fa">Persian / Farsi</option><option value="he">Hebrew</option><option value="bn">Bengali</option><option value="ur">Urdu</option><option value="el">Greek</option><option value="sr">Serbian</option><option value="hr">Croatian</option><option value="ro">Romanian</option><option value="cs">Czech</option><option value="hu">Hungarian</option><option value="ka">Georgian</option><option value="hy">Armenian</option><option value="am">Amharic</option><option value="km">Khmer</option><option value="lo">Lao</option><option value="my">Burmese</option><option value="ta">Tamil</option><option value="te">Telugu</option><option value="kn">Kannada</option><option value="ml">Malayalam</option><option value="da">Danish</option><option value="no">Norwegian</option><option value="fi">Finnish</option><option value="ms">Malay</option><option value="bg">Bulgarian</option><option value="sk">Slovak</option><option value="sl">Slovenian</option><option value="et">Estonian</option><option value="lv">Latvian</option><option value="lt">Lithuanian</option><option value="is">Icelandic</option><option value="sw">Swahili</option><option value="ca">Catalan</option><option value="eu">Basque</option><option value="gl">Galician</option><option value="cy">Welsh</option><option value="ga">Irish</option></select><small class="language-help">Free uses one active language at a time. Automatic detection is planned as a Pro mode.</small></div>
         </article>
         <article class="panel settings-card data" id="dashboardAccountCard">
           <small>ACCOUNT, PLAN &amp; DATA</small><h2>Local beta profile</h2>
@@ -132,6 +132,7 @@
     </section>
   </main>
 </div>
+<div id="chartTooltip" class="chart-tooltip" hidden></div>
 <script src="../lib/tracker-analytics.js"></script>
 <script src="../lib/entitlements.js"></script>
 <script src="dashboard.js"></script>

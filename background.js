@@ -22,6 +22,7 @@ const STORAGE_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_TARGET_LANGUAGE = { code: "ja", name: "Japanese" };
 const WEEKLY_REVIEW_ALARM = "litWeeklyReviewV1";
 const LANGUAGE_NAMES = {
+  auto: "Automatic (Pro)",
   ja: "Japanese", en: "English", sv: "Swedish", es: "Spanish", fr: "French",
   de: "German", it: "Italian", pt: "Portuguese", ko: "Korean", zh: "Chinese",
   ru: "Russian", uk: "Ukrainian", ar: "Arabic", hi: "Hindi", tr: "Turkish",
@@ -31,11 +32,14 @@ const LANGUAGE_NAMES = {
   bn: "Bengali", ur: "Urdu", cs: "Czech", ro: "Romanian", hu: "Hungarian",
   bg: "Bulgarian", hr: "Croatian", sr: "Serbian", sk: "Slovak", sl: "Slovenian",
   et: "Estonian", lv: "Latvian", lt: "Lithuanian", is: "Icelandic",
-  sw: "Swahili", ca: "Catalan", eu: "Basque", gl: "Galician", cy: "Welsh", ga: "Irish"
+  sw: "Swahili", ca: "Catalan", eu: "Basque", gl: "Galician", cy: "Welsh", ga: "Irish",
+  ka: "Georgian", hy: "Armenian", am: "Amharic", km: "Khmer", lo: "Lao",
+  my: "Burmese", ta: "Tamil", te: "Telugu", kn: "Kannada", ml: "Malayalam"
 };
 
 function normalizeLanguageCode(value) {
   const code = String(value || "").trim().toLowerCase().replace(/_/g, "-");
+  if (code === "auto") return "auto";
   return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(code) ? code.slice(0, 24) : "ja";
 }
 
@@ -1508,6 +1512,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         imported += 1;
       }
       return { ok: true, imported };
+    }).then(sendResponse);
+    return true;
+  }
+
+  // TEMPORARY TEST-ONLY HANDLER — remove before release. Seeds random local
+  // immersion data (dates, durations, sources, sessions) so the UI can be
+  // reviewed with realistic data. Never wired to any network or sync path.
+  if (message.type === "seedRandomImmersion") {
+    updateState((state) => {
+      const rawCode = normalizeLanguageCode(state.preferences?.targetLanguage?.code);
+      // "auto" is a display-only mode, not a real per-language storage bucket —
+      // the canonical data model always folds it back to "ja", so seeding under
+      // a literal "auto" bucket would double-count against any existing "ja"
+      // data for the same day and get rejected as a divergence. Match that
+      // fallback here.
+      const code = rawCode === "auto" ? "ja" : rawCode;
+      const sources = ["youtube", "netflix", "reading", "listening", "writing", "vocab", "grammar"];
+      const totalDays = 60;
+      let seededDays = 0;
+      let seededSessions = 0;
+      for (let offset = totalDays - 1; offset >= 0; offset -= 1) {
+        if (Math.random() < 0.28) continue; // leave gaps so streaks/calendar look realistic
+        const date = new Date();
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() - offset);
+        const timestamp = date.getTime();
+        const dateKey = localDateKey(timestamp);
+        const sourceCount = 1 + Math.floor(Math.random() * 3);
+        const daySources = sources
+          .map((source) => ({ source, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .slice(0, sourceCount)
+          .map((entry) => entry.source);
+        let dayActiveSeconds = 0;
+        let dayPassiveSeconds = 0;
+        let firstSource = daySources[0] || "other";
+        for (const source of daySources) {
+          const activeSeconds = Math.round((5 + Math.random() * 85) * 60);
+          const passiveSeconds = Math.random() < 0.6 ? Math.round(Math.random() * 40 * 60) : 0;
+          addManualSeconds(state, { source, mode: "active", seconds: activeSeconds, timestamp, languageCode: code });
+          if (passiveSeconds) addManualSeconds(state, { source, mode: "passive", seconds: passiveSeconds, timestamp, languageCode: code });
+          dayActiveSeconds += activeSeconds;
+          dayPassiveSeconds += passiveSeconds;
+        }
+        seededDays += 1;
+        if (offset < 12) {
+          const id = "seed-" + dateKey + "-" + Math.random().toString(36).slice(2, 8);
+          addSessionDelta(state, id, {
+            kind: "seed",
+            site: firstSource,
+            title: "Random seed — " + firstSource,
+            languageCode: code,
+            dateKey,
+            active: dayActiveSeconds,
+            passive: dayPassiveSeconds,
+            timestamp
+          });
+          seededSessions += 1;
+        }
+      }
+      return { ok: true, seededDays, seededSessions };
     }).then(sendResponse);
     return true;
   }
