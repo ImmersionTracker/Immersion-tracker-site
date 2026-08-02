@@ -1,0 +1,125 @@
+@font-face {
+  font-family: "Manrope Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("./fonts/manrope-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Noto Sans Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/noto-sans-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("./fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("./fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+
+:root {
+  --font-display: "Manrope Variable", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", sans-serif;
+  --font-body: "Noto Sans Variable", "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif;
+  --font-utility: "IBM Plex Mono", Consolas, monospace;
+  --screening-canvas: #07111f;
+  --screening-card: #132238;
+  --screening-raised: #192b43;
+  --screening-border: #304663;
+  --screening-text: #f7faff;
+  --screening-body: #c7d3e2;
+  --screening-muted: #91a3b9;
+  --caption-cyan: #58d6e8;
+  --signal-green: #47e39a;
+  --audio-amber: #ffb454;
+  --signal-amber: var(--audio-amber);
+  --goal-iris: #9296ff;
+  --alert-coral: #ff7d91;
+  --signal-danger: var(--alert-coral);
+}
+
+:root[data-theme="light"] {
+  --screening-canvas: #f4f7fb;
+  --screening-card: #ffffff;
+  --screening-raised: #edf2f8;
+  --screening-border: #c7d4e3;
+  --screening-text: #132033;
+  --screening-body: #44566f;
+  --screening-muted: #6c7c91;
+  --caption-cyan: #168ea3;
+  --signal-green: #138a59;
+  --audio-amber: #b96b08;
+  --signal-amber: var(--audio-amber);
+  --goal-iris: #5a63d8;
+  --alert-coral: #c7435a;
+  --signal-danger: var(--alert-coral);
+}
+
+.display-number,
+.metric-number,
+.hero-number {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.045em;
+}
+
+.utility-text,
+time,
+[data-utility] {
+  font-family: var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.chart-empty-state {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--screening-muted);
+  font-family: var(--font-body);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+
+.chart-empty-state::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: var(--empty-baseline-bottom, 22px);
+  left: 0;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--screening-border) 0 8px, transparent 8px 13px);
+}
+
+.chart-empty-state span {
+  position: relative;
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--screening-card) 88%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

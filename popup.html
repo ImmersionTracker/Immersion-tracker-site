@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Language Immersion Tracker</title><link rel="stylesheet" href="assets/design-system.css"><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header class="app-header">
+    <div class="brand"><div class="eyebrow">Language immersion</div><h1>Tracker</h1></div>
+    <div class="header-actions">
+      <select id="targetLanguageSelect" class="header-language" title="Target language" aria-label="Target language">
+        <option value="ja">Japanese</option><option value="en">English</option><option value="sv">Swedish</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="ko">Korean</option><option value="zh">Chinese</option><option value="ru">Russian</option><option value="uk">Ukrainian</option><option value="ar">Arabic</option><option value="hi">Hindi</option><option value="tr">Turkish</option><option value="pl">Polish</option><option value="nl">Dutch</option><option value="da">Danish</option><option value="no">Norwegian</option><option value="fi">Finnish</option><option value="vi">Vietnamese</option><option value="th">Thai</option><option value="id">Indonesian</option><option value="ms">Malay</option><option value="tl">Filipino / Tagalog</option><option value="el">Greek</option><option value="he">Hebrew</option><option value="fa">Persian / Farsi</option><option value="bn">Bengali</option><option value="ur">Urdu</option><option value="cs">Czech</option><option value="ro">Romanian</option><option value="hu">Hungarian</option><option value="bg">Bulgarian</option><option value="hr">Croatian</option><option value="sr">Serbian</option><option value="sk">Slovak</option><option value="sl">Slovenian</option><option value="et">Estonian</option><option value="lv">Latvian</option><option value="lt">Lithuanian</option><option value="is">Icelandic</option><option value="sw">Swahili</option><option value="ca">Catalan</option><option value="eu">Basque</option><option value="gl">Galician</option><option value="cy">Welsh</option><option value="ga">Irish</option><option value="custom">Custom...</option>
+      </select>
+      <button id="openDashboardButton" class="dashboard-button" title="Open full dashboard" aria-label="Open full dashboard"><span aria-hidden="true">&#9638;</span> Dashboard</button>
+      <button id="quickThemeToggle" class="icon-button quick-theme-button" type="button" title="Switch to light mode" aria-label="Switch to light mode"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></button>
+      <button id="openAccountInfo" class="icon-button" type="button" title="Account and plan" aria-label="Account and plan"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.25"></circle><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"></path></svg></button>
+      <button id="openGeneralSettings" class="icon-button" title="More settings" aria-label="More settings"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.25"></circle><circle cx="12" cy="12" r="1.25"></circle><circle cx="12" cy="19" r="1.25"></circle></svg></button>
+    </div>
+  </header>
+
+  <nav class="tab-navigation" role="tablist" aria-label="Tracker sections">
+    <button class="tab-button active" role="tab" aria-selected="true" data-tab-target="trackerPanel">Tracker</button>
+    <button class="tab-button" role="tab" aria-selected="false" data-tab-target="insightsPanel">Insights</button>
+    <button class="tab-button" role="tab" aria-selected="false" data-tab-target="manualPanel">Manual</button>
+  </nav>
+
+  <main>
+    <div id="storageErrorBanner" class="storage-error-banner hidden" role="alert">Tracking data could not be saved. Open Settings to check storage and export a backup.</div>
+    <section id="trackerPanel" class="tab-panel active" role="tabpanel">
+      <article id="automaticSessionCard" class="surface automatic-card">
+        <div class="section-top"><div><div class="section-heading">Automatic session</div><h2 id="currentTitle">No supported video detected</h2><div id="automaticEvidence" class="secondary-text">Waiting for supported playback</div></div><span id="currentLanguageHint" class="subtle-chip">Japanese</span></div>
+        <div class="session-values"><span><strong id="sessionActive">0 min</strong><small>Active</small></span><span><strong id="sessionPassive">0 min</strong><small>Passive</small></span></div>
+        <div class="button-row"><button id="showOverlayButton">Show status</button><button id="confirmButton" class="primary hidden">Count as target</button><button id="rejectButton" class="danger hidden">Not target</button></div>
+      </article>
+
+      <article class="surface goal-card">
+        <div class="section-top goal-top"><div><div class="section-heading">Goal progress</div><h2 id="goalPeriodTitle">Today</h2></div><div class="period-selector" role="group" aria-label="Goal period"><button class="period-button active" data-goal-period="daily">Day</button><button class="period-button" data-goal-period="weekly">Week</button><button class="period-button" data-goal-period="monthly">Month</button><button class="period-button" data-goal-period="yearly">Year</button></div></div>
+        <div class="goal-visual">
+          <div id="goalProgressRing" class="progress-ring" role="img" aria-label="No goal progress yet"><div class="ring-center"><strong id="goalProgressValue">0</strong><span id="goalProgressTarget">of 360 min</span></div></div>
+          <div class="goal-copy"><div><strong id="goalProgressPercent">0%</strong> complete</div><p id="goalProgressRemaining" class="secondary-text">360 minutes remaining</p><p id="goalCountingCaption" class="secondary-text goal-counting-caption">Active and passive time count toward this goal.</p><div class="legend vertical"><span id="goalActiveRow"><i class="legend-dot active-color"></i>Active <strong id="goalActiveValue">0m</strong></span><span id="goalPassiveRow"><i class="legend-dot passive-color"></i>Passive <strong id="goalPassiveValue">0m</strong></span><span id="goalRemainingRow"><i class="legend-dot remainder-color"></i>Remaining</span></div></div>
+        </div>
+      </article>
+
+      <div class="hidden-data hidden">
+        <span id="todayTotal"></span><span id="todayActive"></span><span id="todayPassive"></span><div id="todaySites"></div>
+        <span id="weekTotal"></span><span id="weekActive"></span><span id="weekPassive"></span>
+        <span id="dailyGoalCounter"></span><div><div id="dailyGoalProgress"></div></div><span id="weeklyGoalCounter"></span><div><div id="weeklyGoalProgress"></div></div>
+        <div id="extendedGoalsSection"><div id="monthlyGoalRow"><span id="monthlyGoalCounter"></span><div><div id="monthlyGoalProgress"></div></div></div><div id="yearlyGoalRow"><span id="yearlyGoalCounter"></span><div><div id="yearlyGoalProgress"></div></div></div>
+      </div>
+    </section>
+
+    <section id="insightsPanel" class="tab-panel" role="tabpanel" hidden>
+      <div class="insights-column">
+      <article id="calendarCard" class="surface calendar-card">
+        <div class="section-top"><div><div class="section-heading">Monthly calendar</div><h2 id="calendarTitle"></h2></div><div class="calendar-nav"><button id="previousMonth" aria-label="Previous month">&lsaquo;</button><button id="nextMonth" aria-label="Next month">&rsaquo;</button></div></div>
+        <div class="calendar-meta"><span id="calendarMonthTotal">0 min this month</span></div>
+        <div class="calendar-weekdays"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div><div id="calendarGrid" class="calendar-grid"></div>
+        <div class="legend calendar-legend" aria-label="Calendar status legend"><span class="calendar-intensity"><span>Recorded</span><i class="key-level-1"></i><i class="key-level-2"></i><i class="key-level-3"></i><i class="key-level-4"></i><span>More</span></span><span><i class="key-goal"></i>Daily goal met</span><span><i class="key-today"></i>Today</span><span><i class="key-week"></i>Weekly goal met</span></div>
+        <div class="streak-grid"><div><span>Immersion streak</span><strong id="immersionStreak">0 days</strong></div><div><span>Goal streak</span><strong id="goalStreak">0 days</strong></div></div><p id="weekReviewText" class="secondary-text"></p>
+      </article>
+
+      <article class="surface source-score-card">
+        <div class="section-heading">All-time immersion</div><h2>Total source score</h2>
+        <p class="secondary-text">Lifetime totals across all recorded history. General sources only—no show, video, or channel titles.</p>
+        <div id="sourceChart" class="source-chart"></div>
+      </article>
+      </div>
+
+      <div class="insights-column">
+      <article class="surface chart-card">
+        <div class="section-top"><div><div class="section-heading">Weekly immersion</div><h2>Active and passive</h2></div></div>
+        <div class="legend chart-legend"><span><i class="legend-dot active-color"></i>Active immersion</span><span><i class="legend-dot passive-color"></i>Passive immersion</span></div>
+        <p id="weeklyChartScale" class="secondary-text chart-scale"></p>
+        <div id="weeklyChart" class="weekly-chart"></div>
+      </article>
+
+      <article class="surface history-card">
+        <div class="section-top"><div><div class="section-heading">Recent sessions</div><h2>History</h2></div><div class="history-tools"><select id="historyLimit" title="Number of entries"><option value="5">5 entries</option><option value="10">10 entries</option></select><button id="undoDeleteButton" class="hidden">Undo</button></div></div>
+        <div id="historyList" class="history-list"></div>
+      </article>
+      </div>
+    </section>
+
+    <section id="manualPanel" class="tab-panel" role="tabpanel" hidden>
+      <article class="surface manual-card">
+        <div class="section-heading">Manual timer</div><h2>Record any immersion source</h2>
+        <div class="timer-display"><div><span id="manualTimerLabel">Ready to record</span><strong id="manualElapsed">0:00</strong></div><span id="manualTimerPill" class="pill stopped">Stopped</span></div>
+        <div class="form-grid"><label class="span-two">Action<input id="manualAction" maxlength="160" required placeholder="e.g. Singing practice"></label><label>Category<select id="manualSource"><option value="reading">Reading</option><option value="listening">Listening</option><option value="writing">Writing</option><option value="speaking">Speaking</option><option value="watching">Watching</option><option value="vocab">Vocab</option><option value="grammar">Grammar</option><option value="__custom__">+ Add custom category</option></select></label><label>Type<select id="manualMode"><option value="active">Active</option><option value="passive">Passive</option></select></label></div>
+        <div class="button-row"><button id="startManualButton" class="primary">Start timer</button><button id="pauseManualButton" class="danger hidden">Pause timer</button></div><div id="manualStatus" class="form-status"></div>
+      </article>
+
+      <article class="surface quick-add-card">
+        <div class="section-heading">Quick add</div><h2>Completed immersion</h2>
+        <form id="customImmersionForm"><div class="form-grid"><label class="span-two quick-action">Action<input id="customAction" maxlength="160" required placeholder="e.g. Read chapter 4"></label><label class="span-two quick-date">Date<input id="customDate" type="date" required></label><label>Category<select id="customSource" required><option value="reading">Reading</option><option value="listening">Listening</option><option value="writing">Writing</option><option value="speaking">Speaking</option><option value="watching">Watching</option><option value="vocab">Vocab</option><option value="grammar">Grammar</option><option value="__custom__">+ Add custom category</option></select></label><label>Type<select id="customMode"><option value="active">Active</option><option value="passive">Passive</option></select></label><label>Hours<input id="customHours" type="number" min="0" max="168" value="0"></label><label>Minutes<input id="customMinutes" type="number" min="0" max="59" value="30"></label></div><button class="primary full" type="submit">Add immersion</button><div id="customStatus" class="form-status"></div></form>
+      </article>
+
+      <div id="customCategoryBuilder" class="custom-category-builder hidden" role="region" aria-label="Add custom category"><label>New category<input id="newCustomCategory" maxlength="40" placeholder="e.g. Gaming"></label><button id="addCustomCategory" class="primary" type="button">Save category</button><button id="cancelCustomCategory" type="button">Cancel</button><div id="customCategoryStatus" class="form-status"></div></div>
+
+    </section>
+  </main>
+
+  <dialog id="goalSettingsDialog" class="goal-settings-dialog" aria-labelledby="goalSettingsTitle"><div class="dialog-heading"><div><div class="eyebrow">Settings</div><h2 id="goalSettingsTitle">Immersion goals</h2></div><button data-close-dialog class="icon-button" aria-label="Close goal settings">&times;</button></div><div class="form-grid goal-primary-grid"><label>Daily goal<div class="input-suffix"><input id="dailyGoalMinutes" type="number" min="1" max="525600"><span>min</span></div></label><label>Weekly goal<div class="input-suffix"><input id="weeklyGoalMinutes" type="number" min="1" max="525600"><span>min</span></div></label></div><div class="optional-goal-setting"><label class="check-label"><input id="monthlyGoalEnabled" type="checkbox"> Monthly goal</label><div class="input-suffix"><input id="monthlyGoalMinutes" type="number"><span>min</span></div></div><div class="optional-goal-setting"><label class="check-label"><input id="yearlyGoalEnabled" type="checkbox"> Yearly goal</label><div class="input-suffix"><input id="yearlyGoalMinutes" type="number"><span>min</span></div></div><div class="goal-mode-settings"><label>What counts toward goals<select id="goalCountingMode"><option value="both">Active and passive immersion</option><option value="active">Active immersion only</option></select></label><label>Breakdown shown in Goal Progress<select id="goalDisplayMode"><option value="both">Show active and passive</option><option value="active">Show active only</option><option value="passive">Show passive only</option></select></label><p class="secondary-text">The breakdown choice affects only the Tracker Goal Progress card. Insights always keeps the complete active and passive history.</p></div><label class="check-label goal-notifications"><input id="notificationsEnabled" type="checkbox"> Goal and weekly-review notifications</label><button id="saveGoalSettings" class="primary full">Save goals</button><div id="goalSettingsStatus" class="form-status"></div></dialog>
+
+  <dialog id="generalSettingsDialog" aria-labelledby="generalSettingsTitle">
+    <div class="dialog-heading"><div><div class="eyebrow">Settings</div><h2 id="generalSettingsTitle">Tracker settings</h2></div><button data-close-dialog class="icon-button" aria-label="Close tracker settings">&times;</button></div>
+    <section class="dialog-section fully-manual-settings"><h3>Fully manual language mode</h3><label class="check-label"><input id="fullyManualEnabled" type="checkbox"> Count every supported video as the target language</label><p class="settings-warning"><strong>Use with care:</strong> language checks and confirmation questions are skipped. Turn this off before playing videos in another language, or that time will also be recorded.</p><button id="saveTrackingSettings" class="primary full">Save language mode</button><div id="trackingSettingsStatus" class="form-status" aria-live="polite"></div></section>
+    <section class="dialog-section"><h3>Video overlay</h3><label class="check-label"><input id="autoMinimizeEnabled" type="checkbox"> Auto-minimize video status</label><label>Minimize after<div class="input-suffix"><input id="autoMinimizeSeconds" type="number" min="1" max="300"><span>seconds</span></div></label><button id="saveOverlaySettings" class="primary full">Save overlay settings</button><div id="settingsStatus" class="form-status"></div></section>
+    <section class="dialog-section appearance-settings"><h3>Appearance</h3><p class="secondary-text">Choose how the tracker dashboard looks.</p><div class="theme-picker" role="group" aria-label="Color theme"><button id="lightThemeButton" class="theme-option" type="button" aria-pressed="false" data-theme-value="light"><span class="theme-icon" aria-hidden="true">&#9728;</span><span><strong>Light</strong><small>Bright and clean</small></span></button><button id="darkThemeButton" class="theme-option" type="button" aria-pressed="true" data-theme-value="dark"><span class="theme-icon" aria-hidden="true">&#9790;</span><span><strong>Dark</strong><small>Easy on the eyes</small></span></button></div><div id="themeStatus" class="form-status" aria-live="polite"></div></section>
+    <section class="dialog-section settings-shortcuts" aria-label="Goals and help"><button id="openGoalSettingsFromGeneral">Adjust goals</button><button id="replayTutorialButton">Replay quick tutorial</button><button id="openAccountInfoFromSettings">Account &amp; plan</button></section>
+    <section class="dialog-section"><h3>Sync and data</h3><div class="sync-row"><span id="syncStatus">Checking sync...</span><button id="syncButton">Sync now</button></div><div class="storage-usage"><div><strong>Storage used</strong><span id="storageUsageStatus">Checking...</span></div><button id="refreshStorageUsage" type="button">Refresh</button><small id="storageRetentionStatus">Daily totals and source breakdowns stay on this device; only the latest ten History entries can retain titles.</small></div><div class="data-actions"><button id="exportJsonButton">Export JSON</button><button id="exportCsvButton">Export CSV</button><label class="file-button" role="button" tabindex="0">Import<input id="importFileInput" type="file" accept=".json,.csv,application/json,text/csv"></label></div><div id="dataStatus" class="form-status"></div><button id="hotkeysButton" class="full">Keyboard shortcuts</button><button id="resetButton" class="danger full">Reset all tracking data</button></section>
+  </dialog>
+
+  <dialog id="accountInfoDialog" class="account-dialog" aria-labelledby="accountInfoTitle">
+    <div class="dialog-heading"><div><div class="eyebrow">Account &amp; plan</div><h2 id="accountInfoTitle">Local beta profile</h2></div><button data-close-dialog class="icon-button" aria-label="Close account information">&times;</button></div>
+    <div class="account-summary"><div class="account-avatar" aria-hidden="true">B</div><div><strong id="accountPlanName">Beta access</strong><span id="accountLanguageStatus">One active language</span></div></div>
+    <p class="secondary-text">No login is required in this version. Your detailed history stays in this browser. Accounts and database sync have not been launched yet.</p>
+    <div class="plan-comparison compact-plan-comparison">
+      <div class="plan-heading"><span>Feature</span><b>Free</b><b>Pro</b></div>
+      <div><span>Automatic &amp; manual tracking</span><b>Included</b><b>Included</b></div>
+      <div><span>Active target languages</span><b>One at a time</b><b>Multi-language planned</b></div>
+      <div><span>Local history &amp; exports</span><b>Included</b><b>Included</b></div>
+      <div><span>Advanced Pro Analytics</span><b>Overview only</b><b>Beta unlocked</b></div>
+      <div><span>Account &amp; cloud database</span><b>Not available</b><b>Planned later</b></div>
+    </div>
+    <p class="plan-footnote">Switching your active language never deletes earlier language data.</p>
+  </dialog>
+
+  <dialog id="onboardingDialog" class="onboarding-dialog" aria-labelledby="onboardingTitle">
+    <div class="onboarding-progress"><span id="onboardingStepLabel">Step 1 of 5</span><button id="skipOnboardingButton" class="link-button">Set up later</button></div>
+    <section class="onboarding-step" data-onboarding-step="0">
+      <div class="onboarding-mark">LI</div><div class="eyebrow">Welcome</div><h2 id="onboardingTitle">Set up your immersion tracker</h2>
+      <p>Choose what you are learning and set goals that fit your routine. You can change everything later.</p>
+    </section>
+    <section class="onboarding-step hidden" data-onboarding-step="1">
+      <div class="eyebrow">Target language</div><h2>What language are you immersing in?</h2>
+      <label>Language<select id="onboardingLanguageSelect"></select></label>
+      <div id="onboardingCustomLanguage" class="form-grid hidden"><label>Name<input id="onboardingCustomLanguageName" maxlength="50" placeholder="Georgian"></label><label>Code<input id="onboardingCustomLanguageCode" maxlength="24" placeholder="ka"></label></div>
+      <button id="onboardingChooseLater" class="link-button choose-later-button" type="button">Choose later</button>
+      <p class="secondary-text">Free supports one active target language at a time. You can switch later and your earlier language data will remain saved.</p>
+    </section>
+    <section class="onboarding-step hidden" data-onboarding-step="2">
+      <div class="eyebrow">Goals</div><h2>Choose a pace you can sustain</h2>
+      <div class="form-grid"><label>Daily goal<div class="input-suffix"><input id="onboardingDailyGoal" type="number" min="1" max="525600" value="60"><span>min</span></div></label><label>Weekly goal<div class="input-suffix"><input id="onboardingWeeklyGoal" type="number" min="1" max="525600" value="420"><span>min</span></div></label></div>
+      <label class="check-label"><input id="onboardingNotifications" type="checkbox" checked> Goal and weekly-review notifications</label>
+    </section>
+    <section class="onboarding-step hidden" data-onboarding-step="3">
+      <div class="eyebrow">Free &amp; Pro</div><h2>Start free, explore Pro during beta</h2>
+      <div class="plan-comparison onboarding-plan-comparison">
+        <div class="plan-heading"><span>Feature</span><b>Free</b><b>Pro</b></div>
+        <div><span>Tracking, goals &amp; exports</span><b>Included</b><b>Included</b></div>
+        <div><span>Active target languages</span><b>One</b><b>Multi-language planned</b></div>
+        <div><span>Analytics</span><b>Overview</b><b>Advanced beta</b></div>
+        <div><span>Account &amp; cloud database</span><b>Not available</b><b>Planned later</b></div>
+      </div>
+      <p class="secondary-text">Pro Analytics is unlocked for everyone during beta. No payment or login is required yet.</p>
+    </section>
+    <section class="onboarding-step hidden" data-onboarding-step="4">
+      <div class="eyebrow">How tracking works</div><h2>Only target-language audio counts</h2>
+      <ul class="onboarding-rules"><li>Streaming subtitles never count as proof of spoken language.</li><li>If a site hides its selected audio, confirm the current video. After two matching confirmations, the tracker can offer to remember strongly related videos.</li><li>Fully manual language mode can count every supported video when you prefer to manage the language yourself.</li><li>Active time means you are using the browser; passive time means the video continues while you are away.</li></ul>
+      <p class="secondary-text">After setup, a short tour will point out the main controls.</p>
+    </section>
+    <div id="onboardingStatus" class="form-status"></div>
+    <div class="onboarding-actions"><button id="onboardingBackButton">Back</button><button id="onboardingNextButton" class="primary">Get started</button></div>
+  </dialog>
+
+  <div id="tutorialScrim" class="tutorial-scrim hidden"></div>
+  <aside id="tutorialCoachmark" class="tutorial-coachmark hidden" role="dialog" aria-labelledby="tutorialTitle">
+    <div id="tutorialStepLabel" class="eyebrow"></div><h2 id="tutorialTitle"></h2><p id="tutorialBody"></p>
+    <div class="tutorial-actions"><button id="tutorialSkipButton">Skip tour</button><span></span><button id="tutorialBackButton">Back</button><button id="tutorialNextButton" class="primary">Next</button></div>
+  </aside>
+
+  <dialog id="customLanguageDialog" aria-labelledby="customLanguageTitle"><div class="dialog-heading"><div><div class="eyebrow">Target language</div><h2 id="customLanguageTitle">Custom language</h2></div><button id="closeLanguageDialog" class="icon-button" aria-label="Close custom language">&times;</button></div><label>Name<input id="customLanguageName" maxlength="50" placeholder="Georgian"></label><label>Code<input id="customLanguageCode" maxlength="24" placeholder="ka"></label><button id="saveLanguageButton" class="primary full">Use language</button><div id="languageStatus" class="form-status"></div></dialog>
+  <dialog id="hotkeysDialog" aria-labelledby="hotkeysTitle"><div class="dialog-heading"><div><div class="eyebrow">Keyboard</div><h2 id="hotkeysTitle">Hotkeys</h2></div><button id="closeHotkeysButton" class="icon-button" aria-label="Close hotkeys">&times;</button></div><div id="hotkeyList" class="hotkey-list"></div><button id="manageHotkeysButton" class="full">Manage shortcuts in Chrome</button></dialog>
+  <dialog id="editSessionDialog" aria-labelledby="editSessionTitleHeading"><div class="dialog-heading"><div><div class="eyebrow">History</div><h2 id="editSessionTitleHeading">Edit session</h2></div><button id="closeEditSession" class="icon-button" aria-label="Close session editor">&times;</button></div><input id="editSessionId" type="hidden"><label>Date<input id="editSessionDate" type="date"></label><label>Category<input id="editSessionSource" maxlength="40"></label><label>Title<input id="editSessionTitle" maxlength="160"></label><div class="form-grid"><label>Active minutes<input id="editSessionActive" type="number" min="0"></label><label>Passive minutes<input id="editSessionPassive" type="number" min="0"></label></div><button id="saveEditedSession" class="primary full">Save changes</button><div id="editSessionStatus" class="form-status"></div></dialog>
+
+  <script src="lib/tracker-analytics.js"></script>
+  <script src="popup.js"></script>
+</body></html>
