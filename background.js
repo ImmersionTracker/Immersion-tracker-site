@@ -645,6 +645,12 @@ function normalizeManualMode(value) {
 }
 
 function addManualSeconds(state, { source, mode, seconds, timestamp = Date.now(), languageCode }) {
+  // No target language chosen yet ("Set up later" stores the und placeholder).
+  // Automatic tracking already refuses in this state; the manual paths did not,
+  // so manual timers and entries were creating a real "Choose a language" bucket
+  // that then appeared in totals, History, the calendar and CSV exports.
+  if (state.preferences?.targetLanguageDeferred === true
+    || state.preferences?.targetLanguage?.code === "und") return 0;
   const safeSeconds = clampManualSeconds(seconds);
   if (!safeSeconds) return 0;
   const safeSource = normalizeManualSource(source);

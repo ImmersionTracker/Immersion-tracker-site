@@ -137,7 +137,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
 @media (max-width: 500px) {
   .app-header { gap: 6px; }
   .header-actions { gap: 5px; }
-  .header-language { width: 94px; flex-basis: 94px; }
+  .header-language { max-width: 132px; }
   .dashboard-button { padding-inline: 6px; }
 }
 
@@ -202,6 +202,12 @@ body { height: 600px; min-height: 600px; overflow-y: auto; font-family: var(--fo
 /* Matches dashboard.css .calendar-key .key-week: the legend swatch has to show
    the same soft amber glow the day cells use, not the 2px underline it drew
    before, or the key stops describing what is actually on the calendar. */
+/* Size to the longest option instead of a hard 100px, which clipped names like
+   "Automatic (Pro)". A select's intrinsic width follows its widest option, so
+   width:auto fits the label; max-width stops a long custom language name from
+   pushing the header buttons off the row. */
+.header-language { width: auto; flex: 0 1 auto; min-width: 96px; max-width: 168px; }
+
 .calendar-legend .key-week { background: color-mix(in srgb, var(--passive) 14%, var(--screening-raised)); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--passive) 65%, transparent), 0 0 6px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
 .automatic-card.is-empty { position: relative; }
 .automatic-card.is-empty::after { content: ""; display: block; height: 18px; margin-top: 12px; opacity: .45; background: repeating-linear-gradient(90deg, var(--caption-cyan) 0 2px, transparent 2px 7px); mask: linear-gradient(transparent 35%, #000 35% 65%, transparent 65%); }
@@ -286,7 +292,7 @@ body { height: 600px; min-height: 600px; overflow-y: auto; font-family: var(--fo
   .app-header { padding-inline: 9px; }
   .brand .eyebrow { display: none; }
   .brand h1 { max-width: 108px; overflow: hidden; font-size: 17px; white-space: nowrap; text-overflow: ellipsis; }
-  .header-language { width: 78px; flex-basis: 78px; }
+  .header-language { max-width: 108px; }
   .dashboard-button { width: 32px; min-width: 32px; padding-inline: 6px; overflow: hidden; font-size: 0; }
   .dashboard-button span { margin: auto; font-size: 13px; }
   .icon-button { min-width: 32px; flex-basis: 32px; }
