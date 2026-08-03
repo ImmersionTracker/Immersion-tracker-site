@@ -187,8 +187,15 @@ body { height: 600px; min-height: 600px; overflow-y: auto; font-family: var(--fo
    plus an ::after underline, so the same streak rendered as a glow in one surface
    and a bar in the other. popup --passive and dashboard --orange both resolve to
    --signal-amber, so these values compute identically on both. */
-.calendar-day.week-complete { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--passive) 65%, transparent), 0 0 9px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
-.calendar-day.daily-complete.week-complete { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white), 0 0 9px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
+/* A completed week is one achievement, not seven. A per-day glow outlined every
+   day in the week individually - including days with no immersion at all, which
+   read as if each empty day had earned something. The bar overhangs each cell by
+   3px against a 4px grid gap, so the seven segments meet and render as a single
+   continuous band under the week. Dashboard uses the same treatment with a 4px
+   overhang for its 6px gap. */
+.calendar-day.week-complete { box-shadow: none; }
+.calendar-day.daily-complete.week-complete { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white); }
+.calendar-day.week-complete::after { content: ""; position: absolute; right: -3px; bottom: 3px; left: -3px; z-index: 2; height: 2px; border-radius: 1px; background: var(--passive); box-shadow: 0 0 5px color-mix(in srgb, var(--passive) 55%, transparent); }
 .calendar-day.today { border-color: transparent; outline: 2px solid var(--caption-cyan); outline-offset: -2px; }
 .calendar-legend .calendar-intensity { gap: 3px; }
 .calendar-legend .calendar-intensity i, .calendar-legend .key-goal, .calendar-legend .key-today, .calendar-legend .key-week { position: relative; width: 10px; height: 10px; flex: 0 0 auto; border-radius: 3px; }
@@ -208,7 +215,8 @@ body { height: 600px; min-height: 600px; overflow-y: auto; font-family: var(--fo
    pushing the header buttons off the row. */
 .header-language { width: auto; flex: 0 1 auto; min-width: 96px; max-width: 168px; }
 
-.calendar-legend .key-week { background: color-mix(in srgb, var(--passive) 14%, var(--screening-raised)); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--passive) 65%, transparent), 0 0 6px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
+.calendar-legend .key-week { background: color-mix(in srgb, var(--passive) 14%, var(--screening-raised)); }
+.calendar-legend .key-week::after { content: ""; position: absolute; right: 1px; bottom: 1px; left: 1px; height: 2px; border-radius: 1px; background: var(--passive); }
 .automatic-card.is-empty { position: relative; }
 .automatic-card.is-empty::after { content: ""; display: block; height: 18px; margin-top: 12px; opacity: .45; background: repeating-linear-gradient(90deg, var(--caption-cyan) 0 2px, transparent 2px 7px); mask: linear-gradient(transparent 35%, #000 35% 65%, transparent 65%); }
 .history-empty.invitation { display: grid; place-items: center; min-height: 92px; padding: 16px; border: 1px dashed var(--border); border-radius: 11px; background: var(--surface-2); text-align: center; }

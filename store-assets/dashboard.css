@@ -337,8 +337,11 @@ main > header { height: 56px; }
 .days .level-3 { background: linear-gradient(145deg, color-mix(in srgb, var(--caption-cyan) 67%, var(--surface-3)), color-mix(in srgb, var(--caption-cyan) 48%, var(--surface-3))); }
 .days .level-4 { background: linear-gradient(145deg, color-mix(in srgb, var(--caption-cyan) 86%, var(--surface-3)), color-mix(in srgb, var(--caption-cyan) 65%, var(--surface-3))); }
 .days .daily-complete { border-color: color-mix(in srgb, var(--goal-iris) 80%, white); background: linear-gradient(145deg, color-mix(in srgb, var(--goal-iris) 88%, white), color-mix(in srgb, var(--goal-iris) 72%, var(--surface))); color: #fff; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white); }
-.days .week-complete { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--orange) 65%, transparent), 0 0 9px 1px color-mix(in srgb, var(--orange) 40%, transparent); }
-.days .daily-complete.week-complete { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white), 0 0 9px 1px color-mix(in srgb, var(--orange) 40%, transparent); }
+/* Continuous week band, matching popup.css .calendar-day.week-complete. The 4px
+   overhang bridges this grid's 6px gap so the seven segments join into one line. */
+.days .week-complete { box-shadow: none; }
+.days .daily-complete.week-complete { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white); }
+.days .week-complete::after { content: ""; position: absolute; right: -4px; bottom: 3px; left: -4px; z-index: 2; height: 2px; border-radius: 1px; background: var(--orange); box-shadow: 0 0 5px color-mix(in srgb, var(--orange) 55%, transparent); }
 .days .today { outline: 2px solid var(--caption-cyan); outline-offset: -2px; }
 .calendar-key { display: flex; flex-wrap: wrap; gap: 8px 13px; margin-top: 8px; color: var(--muted); font-size: 7px; }
 .calendar-key span { display: inline-flex; align-items: center; gap: 5px; }
@@ -351,7 +354,8 @@ main > header { height: 56px; }
 .calendar-key .key-level-4 { background: color-mix(in srgb, var(--caption-cyan) 86%, var(--surface-3)); }
 .calendar-key .key-goal { background: color-mix(in srgb, var(--goal-iris) 70%, var(--surface)); }
 .calendar-key .key-today { border: 2px solid var(--caption-cyan); background: transparent; }
-.calendar-key .key-week { background: color-mix(in srgb, var(--orange) 14%, var(--surface-3)); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--orange) 65%, transparent), 0 0 6px 1px color-mix(in srgb, var(--orange) 40%, transparent); }
+.calendar-key .key-week { background: color-mix(in srgb, var(--orange) 14%, var(--surface-3)); }
+.calendar-key .key-week::after { content: ""; position: absolute; right: 1px; bottom: 1px; left: 1px; height: 2px; border-radius: 1px; background: var(--orange); }
 
 .history-grid { grid-template-rows: 310px 330px; }
 .source-breakdown { height: 247px; }
