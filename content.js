@@ -1537,6 +1537,12 @@
     cancelAutoMinimize();
     if (
       !overlayPreferences.autoMinimizeEnabled ||
+      // An overlay the user opened deliberately (Show status, or the hotkey)
+      // stays open until they close it. Auto-minimize exists to keep the
+      // overlay out of the way when it appeared on its own; applying it here
+      // collapsed the card to the compact pill five seconds after Show status,
+      // which reads as the button having done nothing at all.
+      overlayManuallyShown ||
       overlayCompact ||
       languageState !== "confirmed" ||
       overlay.host.style.display === "none"
@@ -1549,6 +1555,9 @@
   function minimizeOverlay() {
     if (!currentInfo) return;
     cancelAutoMinimize();
+    // Minimizing ends the "user opened this deliberately" state, so a later
+    // overlay that appears on its own can auto-minimize normally again.
+    overlayManuallyShown = false;
     overlayCompact = true;
     overlay.host.style.display = "block";
     renderOverlay();

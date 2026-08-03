@@ -26,17 +26,16 @@ placeholder; made the weekly-goal marker a continuous band on both surfaces.
 
 ## Open bugs, in priority order
 
-1. **"Show status" does nothing.** Popup sends `showTrackerOverlay`;
-   `content.js` handles it at ~1860 and calls `showExpandedOverlay()`. Ruled
-   out: `content.css` positions the host correctly (`position: fixed`,
-   `z-index: 2147483647`), and every manifest-declared file is in the zip.
-   Leading hypothesis: `content.js:1299` sets `overlayManuallyShown = false` and
-   `overlay.host.style.display = "none"` on every `contentChanged`, so late
-   YouTube metadata can hide the overlay immediately after it opens.
-   **Unconfirmed.** The user also runs Migaku and uBlock Origin, both of which
-   inject into YouTube — have them retest in a clean profile with only this
-   extension before changing tracking code. Do not guess-patch `content.js`;
-   its evaluate loop drives active/passive counting.
+1. ~~**"Show status" does nothing.**~~ **FIXED, needs confirming in the
+   browser.** It was never broken: DevTools showed the host at 121x37 with
+   `display: block`, `position: fixed`, `opacity: 1`, on-screen. The expanded
+   card is 310px, so what was visible was the *compact pill* —
+   `showExpandedOverlay()` opened the card and then `scheduleAutoMinimize()`
+   collapsed it after 5 seconds. The `overlayManuallyShown` flag existed for
+   exactly this and was set immediately before the call, but
+   `scheduleAutoMinimize()` was the one place that never read it. Now a
+   deliberately opened overlay stays open, and `minimizeOverlay()` clears the
+   flag so auto-minimize resumes for later auto-opened overlays.
 
 2. **Chrome Sync fails** with "could not save. Check your Chrome Sync
    connection or storage quota" after seeding test data. Sync limits: 100KB
