@@ -69,8 +69,8 @@ with it then rather than making a video pre-emptively.
 
 ### Additional URLs
 
-- **Homepage URL** — `https://melismehmeti.github.io/japanese-immersion-tracker/` once Pages is on, otherwise leave blank.
-- **Support URL** — **DECIDE.** Use the repo's Issues page if public, otherwise leave blank and rely on the store's built-in Support hub.
+- **Homepage URL** — `https://immersiontracker.github.io/Immersion-tracker-site/`
+- **Support URL** — **DECIDE.** Leave blank and rely on the store's built-in Support hub, or add a contact page to the site repo. Don't point this at a repo whose URL carries your surname.
 - **Official URL** — leave blank; requires Search Console domain verification.
 - **Mature content** — leave unchecked.
 
@@ -182,11 +182,19 @@ Tick all three:
 ### Privacy policy URL
 
 ```
-https://melismehmeti.github.io/japanese-immersion-tracker/PRIVACY.html
+https://immersiontracker.github.io/Immersion-tracker-site/privacy
 ```
 
-Blocked until GitHub Pages is enabled — see the tradeoffs discussion. Confirm the
-URL loads in a private window before submitting.
+Served from the separate `Immersion-tracker-site` repo, so no personal name
+appears in the URL and this extension repo does not need to be public.
+
+**The hosted copy must match `PRIVACY.md` in this repo.** As of the last check
+the live page was still the July 17 version, which stated the extension had "no
+developer-operated backend, analytics service, advertising SDK, or database" —
+untrue since v1.9.2. Re-read the live URL and confirm it carries the current
+effective date and the cloud-sync, analytics, and account-deletion sections
+before submitting. Nothing automated can catch this drift: the release checks
+only see the local file.
 
 ---
 
@@ -232,6 +240,6 @@ contains no AI-powered feature.
 
 - [ ] `npm test` passes on your machine, including the two Playwright UI suites
 - [ ] Manual QA walked, including one real account deletion end to end
-- [ ] GitHub Pages enabled and the privacy URL loads in a private window
+- [ ] Privacy URL loads in a private window **and** its text matches this repo's current `PRIVACY.md`
 - [ ] `release/Language-Immersion-Tracker-1.9.4.zip` uploaded — the refreshed one, whose bundled PRIVACY.md matches the hosted policy
 - [ ] Visibility set to Unlisted or Private, not Public
