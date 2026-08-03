@@ -130,22 +130,14 @@ Pauses tracking when the computer is idle or locked, so time is not credited whi
 Shows the goal-completion and weekly-review notifications that the user has explicitly enabled in settings. No notification is shown unless the user turns it on.
 ```
 
-**Host permissions — supported video services**
+**Host permission justification** — the dashboard provides a *single* field for
+all host permissions, not one per host, and caps it at 1,000 characters. The
+following covers both the streaming hosts and Supabase in 996 characters.
 
 ```
-The extension reads only playback state, content identity, and available audio/caption language metadata on the specific streaming services declared in the manifest, in order to decide whether playback counts as target-language immersion and to remember a user-approved language decision for that video or channel. It does not read page content on any other site, and no host permission is requested for sites outside this list.
-```
+The streaming-service hosts are read only for playback state, content identity, and the audio/caption language metadata the player exposes, in order to decide whether playback counts as target-language immersion and to remember a user-approved language decision for that video or channel. No page content is read on any other site.
 
-**Host permission — `https://*.supabase.co/*`**
-
-```
-Contacted only when the user opts in, in one of two independent ways.
-
-First, if the user chooses to create a free account and turn on cloud sync, this host handles sign-in and receives that user's own privacy-minimal daily totals: date, target language, general source category, active seconds, passive seconds, and session count. Rows are protected by row-level security so an account can only read and write its own data, and the extension never embeds a service-role key. The device's local copy remains the primary copy; sync only mirrors it.
-
-Second, and controlled by a separate setting that is off by default, the optional product-analytics toggle sends anonymous events to a dedicated insert-only table on the same host. Each event contains exactly seven fields: target language, platform, content type, active seconds, passive seconds, date, and extension version. It carries no account, device, or session identifier.
-
-Neither path ever transmits titles, URLs, search terms, subtitle or page text, or manual-entry descriptions. If the user does neither, this host is never contacted.
+https://*.supabase.co/* is contacted only if the user opts in, in one of two independent ways. If the user creates a free account and turns on cloud sync, it receives that user's own daily totals: date, target language, general source, active seconds, passive seconds, and session count, protected by row-level security, with no service-role key embedded. Separately, a setting that is off by default sends anonymous analytics events carrying seven fields and no account, device, or session identifier. Neither path ever sends titles, URLs, searches, subtitles, page text, or manual-entry descriptions. If the user opts into neither, this host is never contacted.
 ```
 
 ### Remote code
