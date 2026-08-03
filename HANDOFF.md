@@ -17,52 +17,76 @@ Playwright UI suites. Do not assume it still passes after your changes — the
 sandbox cannot run Playwright (no Chromium download), so the user must run
 `npm test` on their machine and report back.
 
-Done this session: fixed a privacy-policy accuracy bug and added a tripwire for
-it; removed the nonexistent `"windows"` permission; wrote
+Done in the previous session: fixed a privacy-policy accuracy bug and added a
+tripwire for it; removed the nonexistent `"windows"` permission; wrote
 `STORE_SUBMISSION_FIELDS.md` (paste-ready dashboard text) and
 `release/MANUAL_QA_WALKTHROUGH.md`; fixed three UI regressions the Playwright
 suite caught; stopped manual time being recorded against the "Choose a language"
 placeholder; made the weekly-goal marker a continuous band on both surfaces.
 
-## Open bugs, in priority order
+## Fixed, awaiting browser QA
 
-1. ~~**"Show status" does nothing.**~~ **FIXED, needs confirming in the
-   browser.** It was never broken: DevTools showed the host at 121x37 with
-   `display: block`, `position: fixed`, `opacity: 1`, on-screen. The expanded
-   card is 310px, so what was visible was the *compact pill* —
-   `showExpandedOverlay()` opened the card and then `scheduleAutoMinimize()`
-   collapsed it after 5 seconds. The `overlayManuallyShown` flag existed for
-   exactly this and was set immediately before the call, but
-   `scheduleAutoMinimize()` was the one place that never read it. Now a
-   deliberately opened overlay stays open, and `minimizeOverlay()` clears the
-   flag so auto-minimize resumes for later auto-opened overlays.
+All of the below pass `npm run test:foundation` and the regression suite in a
+sandbox. **The two Playwright suites have not run** — no Chromium available —
+so `npm test` on the user's machine is still the gate. The release zip has
+deliberately **not** been rebuilt; do that only once QA passes.
 
-2. **Chrome Sync fails** with "could not save. Check your Chrome Sync
-   connection or storage quota" after seeding test data. Sync limits: 100KB
-   total, 8KB per item, 120 writes/min, 1800/hour. User was at 17KB total, so
-   suspect the per-minute write cap or an oversized item. The code currently
-   swallows the real error — surface `chrome.runtime.lastError` so the message
-   names the actual limit.
+- **Automatic language mode now records the language it detects.** It used to
+  file everything under an `"auto"` bucket, so an English video counted as
+  "Automatic". `identifyPageLanguage()` in content.js asks "what is this?"
+  instead of "is this the target?", using the same evidence in the same order
+  of trust (selected audio → declared audio track → audio hints →
+  auto-captions → title script). `isStorableLanguageCode()` in background.js is
+  now the single rule that `"auto"` and `"und"` are modes, never buckets, and
+  `addTick` holds time rather than inventing one. Switching audio track
+  mid-title moves subsequent time to the new language. When nothing can be
+  identified the overlay asks, offering a dropdown ranked by the user's own
+  most-immersed languages, and remembers the answer per video or per channel.
+  Automatic mode's dashboard shows every language added together.
+- **Manual time in Automatic mode** resolves through `manualLanguageCode()` —
+  most-used language, never `"auto"`. See "Still open" below.
+- **Chrome Sync failures name the limit** they hit (per-item 8KB with the
+  oversized key, 100KB total, 512 items, 120/min, 1800/hour) instead of the old
+  "connection or storage quota" guess. Stored on `state.sync.lastError` so the
+  popup shows it without a manual retry.
+- **Weekly Immersion chart no longer clips labels.** The plot is now the space
+  left after the label rows rather than a fixed 180px scale in a 195px box;
+  axis ticks, gridlines and bar tops all derive from `--chart-label-block`.
+- **Mismatch messages name the detected language** instead of "another
+  language", falling back to the vague wording only when nothing is nameable.
+- **Manual timer**: a "Save progress" button banks time without stopping, and a
+  global violet "M" toolbar badge shows the timer is running.
+- `applySessionContribution` / `rollbackSession` no longer default to `"ja"`.
+- `dashboard-ui.test.cjs` line 139 asserted nothing; it now checks the `::after`
+  band's content, colour, height and overhang against the grid gap.
 
-3. **Weekly Immersion chart clips its X-axis labels**, worse as recorded time
-   grows (dashboard).
+A review pass over the diff caught seven bugs, all now fixed and covered by
+tests: `manualLanguageCode` could never reach its fallbacks (because
+`normalizeLanguageCode` answers `"ja"` for unparseable input — use the new
+`strictLanguageCode` when you need to detect "no code was given"); the
+one-second retry loop rebuilt the language picker under the user; the badge
+blanked the manifest tooltip permanently; legacy `"auto"` data disappeared from
+all views; a remembered language overruled "don't count this video"; an audio
+switch resurrected a declined video; and `sync.lastError` was sticky.
 
-4. **Show which language was detected.** The message "YouTube's automatic
-   captions identify another spoken language" should name it. Detection reads
-   player metadata only (`page-probe.js`: `defaultAudioLanguage`,
-   `audioTrack.languageCode`, caption tracklist) — never audio, never AI.
+**The repo has stale `.git/HEAD.lock` and `.git/index.lock`** that the sandbox
+cannot delete ("Operation not permitted"), so nothing can be committed from a
+sandbox until they are removed from Windows. Same filesystem limitation that
+makes `zip -u` fail.
 
-5. **Manual timer: save progress**, and show a running indicator (the user
-   suggested an icon badge like the A/P badge for automatic tracking).
+## Still open
 
-6. `applySessionContribution` in `background.js` (~line 705) defaults
-   `languageCode` to `"ja"` — a leftover from the Japanese-only origin. Should
-   fall back to the current target language.
-
-7. `dashboard-ui.test.cjs` line 139 asserts
-   `getComputedStyle(day, "::after").backgroundColor !== "transparent"`, but
-   that property returns `"rgba(0, 0, 0, 0)"` when no `::after` exists, so the
-   assertion passes unconditionally and verifies nothing.
+- **Legacy `"auto"` bucket data** is preserved and counted in Automatic mode's
+  combined view, and rolls back from the bucket it was written to, but it is
+  still invisible in any single-language view — correctly, since there is no way
+  to know retroactively what language those hours were. If the user wants it
+  attributed, it needs a deliberate reassignment step.
+- **Manual entry in Automatic mode** silently picks the most-used language.
+  A language selector on the manual timer and Quick add forms would make that
+  explicit; the user has not been asked yet.
+- A session whose language switches mid-play keeps its original
+  `session.languageCode`, so History attributes the whole session to the first
+  language. Daily records and totals are correct.
 
 ## Before the Chrome Web Store submission
 

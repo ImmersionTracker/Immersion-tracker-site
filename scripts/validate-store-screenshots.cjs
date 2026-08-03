@@ -8,7 +8,9 @@ const expected = [
   "02-popup-japanese-detected.png",
   "03-daily-weekly-statistics.png",
   "04-history-analytics.png",
-  "05-settings.png"
+  "05-settings.png",
+  "06-pro-analytics.png",
+  "07-popup-insights.png"
 ];
 
 function paeth(a, b, c) {
@@ -111,7 +113,7 @@ function validateNoWhiteFrame(image, name) {
 const actual = fs.readdirSync(directory).filter(file => file.endsWith(".png")).sort();
 assertFileSet: {
   if (actual.length !== expected.length || expected.some(file => !actual.includes(file))) {
-    throw new Error(`Expected exactly these five PNGs: ${expected.join(", ")}`);
+    throw new Error(`Expected exactly these ${expected.length} PNGs: ${expected.join(", ")}`);
   }
 }
 for (const name of expected) {

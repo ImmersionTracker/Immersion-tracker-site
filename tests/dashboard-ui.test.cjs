@@ -93,6 +93,45 @@ function waitForServer() {
     assert(calendarContainment.cardHeight >= 310, `Consistency card must be tall enough for its legend: ${calendarContainment.cardHeight}px`);
     assert(calendarContainment.legendBottom <= calendarContainment.cardBottom - 10, `Consistency legend must remain inside the card: ${JSON.stringify(calendarContainment)}`);
 
+    // Bars used a fixed 180px scale inside a 195px box, so once a day reached the
+    // daily goal the value labels were pushed out of the chart and clipped.
+    await page.goto(`http://127.0.0.1:${port}/store-assets/dashboard.html?view=stats&demo=1`, { waitUntil: "networkidle" });
+    await page.evaluate(() => document.fonts.ready);
+    const overGoalChart = await page.evaluate(() => {
+      const keys = weekKeys(weekReference());
+      // Every day at twice the daily goal - the worst case for label headroom.
+      const records = Object.fromEntries(keys.map(key => [key, { active: 43200, passive: 43200 }]));
+      renderStats({ ...(latestDashboard?.state || {}), records, dailyRecords: records });
+      const barsBox = document.getElementById("bars").getBoundingClientRect();
+      const days = [...document.querySelectorAll(".bar-day")];
+      const measure = (element) => {
+        const box = element.getBoundingClientRect();
+        return {
+          text: element.textContent.trim(),
+          top: box.top, bottom: box.bottom,
+          clippedText: element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1
+        };
+      };
+      return {
+        dayCount: days.length,
+        bars: barsBox,
+        values: days.map(day => measure(day.querySelector("b"))),
+        names: days.map(day => measure(day.querySelector("span"))),
+        stacks: days.map(day => day.querySelector(".bar-stack").getBoundingClientRect())
+      };
+    });
+    assert.equal(overGoalChart.dayCount, 7, "an over-goal week must still render seven bars");
+    for (const [index, label] of [...overGoalChart.values, ...overGoalChart.names].entries()) {
+      assert(label.top >= overGoalChart.bars.top - 0.5 && label.bottom <= overGoalChart.bars.bottom + 0.5,
+        `weekly chart label ${index} ("${label.text}") escapes the chart box: ${label.top}-${label.bottom} vs ${overGoalChart.bars.top}-${overGoalChart.bars.bottom}`);
+      assert(!label.clippedText, `weekly chart label ${index} ("${label.text}") is clipped by its own box`);
+    }
+    for (const [index, stack] of overGoalChart.stacks.entries()) {
+      assert(stack.top >= overGoalChart.values[index].bottom - 0.5,
+        `bar ${index} must stay below its value label, not overlap it`);
+      assert(stack.height > 0, `bar ${index} must still be drawn at ${stack.height}px`);
+    }
+
     const calendarSurfaces = [
       ["dashboard", "dark", `http://127.0.0.1:${port}/store-assets/dashboard.html?view=stats&demo=1&theme=dark`, "#days > div"],
       ["popup", "dark", `http://127.0.0.1:${port}/popup.html?calendarStates=1&theme=dark`, "#calendarGrid > .calendar-day"],
@@ -128,7 +167,20 @@ function waitForServer() {
           dailyBackground: daily ? getComputedStyle(daily).backgroundImage : "none",
           todayOutline: today ? getComputedStyle(today).outlineStyle : "none",
           weeklyCount: weekly.length,
-          weeklyMarker: weekly[0] ? getComputedStyle(weekly[0], "::after").backgroundColor : "transparent",
+          // A missing ::after still reports backgroundColor "rgba(0, 0, 0, 0)",
+          // so read content/height/insets too - colour alone proves nothing.
+          weeklyMarker: weekly[0] ? (() => {
+            const after = getComputedStyle(weekly[0], "::after");
+            const grid = weekly[0].parentElement;
+            return {
+              content: after.content,
+              backgroundColor: after.backgroundColor,
+              height: parseFloat(after.height) || 0,
+              left: parseFloat(after.left) || 0,
+              right: parseFloat(after.right) || 0,
+              columnGap: parseFloat(getComputedStyle(grid).columnGap) || 0
+            };
+          })() : null,
           weeklyBoxShadow: weekly[0] ? getComputedStyle(weekly[0]).boxShadow : "none",
           legend: legend?.textContent.replace(/\s+/g, " ").trim() || ""
         };
@@ -136,7 +188,16 @@ function waitForServer() {
       assert(calendar.levels.every(Boolean) && new Set(calendar.backgrounds).size === 4, `${surface}: calendar needs four distinct recorded-intensity states`);
       assert(calendar.daily.includes("daily-complete"), `${surface}: calendar needs a daily-goal state`);
       assert.notEqual(calendar.todayOutline, "none", `${surface}: calendar must keep today's outline`);
-      assert(calendar.weeklyCount >= 7 && calendar.weeklyMarker !== "transparent", `${surface}: calendar needs a continuous weekly-goal marker`);
+      assert(calendar.weeklyCount >= 7, `${surface}: a completed week must mark all seven days, got ${calendar.weeklyCount}`);
+      const marker = calendar.weeklyMarker;
+      assert(marker, `${surface}: calendar needs a weekly-goal marker`);
+      assert(marker.content !== "none", `${surface}: the weekly-goal marker's ::after must actually render`);
+      assert(!/^rgba\(0, 0, 0, 0\)$/.test(marker.backgroundColor) && marker.backgroundColor !== "transparent",
+        `${surface}: the weekly-goal marker needs a visible colour, got ${marker.backgroundColor}`);
+      assert(marker.height > 0, `${surface}: the weekly-goal marker needs a non-zero height, got ${marker.height}`);
+      // The band spans the grid gap only if each cell's overhang covers half of it.
+      assert(marker.left < 0 && marker.right < 0 && (-marker.left) * 2 >= marker.columnGap && (-marker.right) * 2 >= marker.columnGap,
+        `${surface}: the weekly-goal marker must overhang each cell by at least half the ${marker.columnGap}px grid gap to read as one continuous band, got left ${marker.left}px / right ${marker.right}px`);
       assert(calendar.legend.includes("Recorded") && calendar.legend.includes("More") && calendar.legend.includes("Daily goal met") && calendar.legend.includes("Weekly goal met"), `${surface}: calendar legend must explain every state`);
       calendarResults.set(`${surface}-${theme}`, calendar);
     }
@@ -146,6 +207,12 @@ function waitForServer() {
       assert.deepEqual(popupCalendar.backgrounds, dashboardCalendar.backgrounds, `${theme}: popup and Dashboard intensity colors must match`);
       assert.equal(popupCalendar.dailyBackground, dashboardCalendar.dailyBackground, `${theme}: popup and Dashboard daily-goal colors must match`);
       assert.equal(popupCalendar.weeklyBoxShadow, dashboardCalendar.weeklyBoxShadow, `${theme}: popup and Dashboard weekly-goal treatment must match`);
+      // Both surfaces draw the band from the same amber token at the same weight;
+      // only the overhang differs, because their grid gaps differ.
+      assert.equal(popupCalendar.weeklyMarker.backgroundColor, dashboardCalendar.weeklyMarker.backgroundColor,
+        `${theme}: popup and Dashboard weekly-goal band colors must match`);
+      assert.equal(popupCalendar.weeklyMarker.height, dashboardCalendar.weeklyMarker.height,
+        `${theme}: popup and Dashboard weekly-goal band heights must match`);
     }
 
     await page.goto(`http://127.0.0.1:${port}/store-assets/dashboard.html?view=history&demo=1`, { waitUntil: "networkidle" });

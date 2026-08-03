@@ -13,7 +13,9 @@ const expected = [
   ['02-popup-japanese-detected.png', 'capture.html?mode=detected', '[data-ready="true"]'],
   ['03-daily-weekly-statistics.png', 'dashboard.html?view=stats&demo=1', '#stats.active'],
   ['04-history-analytics.png', 'dashboard.html?view=history&demo=1', '#history.active'],
-  ['05-settings.png', 'dashboard.html?view=settings&demo=1', '#settings.active']
+  ['05-settings.png', 'dashboard.html?view=settings&demo=1', '#settings.active'],
+  ['06-pro-analytics.png', 'dashboard.html?view=pro&demo=1', '#pro.active'],
+  ['07-popup-insights.png', 'capture.html?mode=insights', '[data-ready="true"]']
 ];
 const screenshotTheme = process.env.SCREENSHOT_THEME === 'light' ? 'light' : 'dark';
 

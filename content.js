@@ -76,6 +76,10 @@
   const isStreamingSite = Boolean(streamingSite);
   let targetLanguage = { code: "ja", name: "Japanese" };
   let detectedLanguage = null;
+  // Languages offered in Automatic mode's "which language is this?" prompt,
+  // most-immersed first. Filled from the background on demand.
+  let languageChoices = [];
+  let automaticResolutionSequence = 0;
 
   let currentVideo = null;
   let currentInfo = null;
@@ -157,14 +161,7 @@
     // Player metadata often arrives after playback starts. Re-evaluate
     // candidates, and immediately dismiss a prompt if another primary language
     // becomes clear.
-    if (
-      currentInfo &&
-      !overlayPreferences.fullyManualEnabled &&
-      isVideoPlaying(currentVideo) &&
-      ["checking", "awaiting", "not-candidate", "primary-other"].includes(languageState)
-    ) {
-      applyDetectionResult(detectTargetLanguage(currentInfo));
-    }
+    retryDetection(["checking", "awaiting", "awaiting-language", "not-candidate", "primary-other"]);
   });
 
   function getYouTubeVideoId() {
@@ -751,6 +748,21 @@
     });
   }
 
+  // "Another language" is not actionable — name it. Every code here comes from
+  // player metadata that page-probe.js already reads (defaultAudioLanguage,
+  // audioTrack.languageCode, the caption tracklist). Nothing listens to audio.
+  function namedOtherLanguage(code, fallbackLabel) {
+    const named = languageFromCode(code);
+    if (named) return named.name;
+    const label = String(fallbackLabel || "")
+      .replace(/\s*[([]\s*(?:auto[- ]?generated|automatic|CC|closed captions?)\s*[)\]]\s*/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (label) return label;
+    const normalized = normalizeLanguageCode(code);
+    return normalized ? normalized.toUpperCase() : "";
+  }
+
   function findPrimaryOtherLanguageEvidence() {
     const selectedAudio = findSelectedOtherAudioLabel();
     if (selectedAudio) {
@@ -771,14 +783,21 @@
       return (path.includes("audio") || path.includes("defaultaudiolanguage")) &&
         isLanguageCode(hint.value) && !isTargetLanguageCode(hint.value);
     });
-    if (audioHint) return "YouTube reports another language as the primary audio language.";
+    if (audioHint) {
+      const hintName = namedOtherLanguage(audioHint.value);
+      return hintName
+        ? "YouTube reports " + hintName + " as the primary audio language, not " + targetLanguage.name + "."
+        : "YouTube reports another language as the primary audio language.";
+    }
     const otherAutomaticCaption = (pageProbe.captions || []).find((track) =>
       isAutomaticCaptionTrack(track) && isLanguageCode(track.languageCode) &&
       !isTargetLanguageCode(track.languageCode)
     );
-    return otherAutomaticCaption
-      ? "YouTube's automatic captions identify another spoken language."
-      : "";
+    if (!otherAutomaticCaption) return "";
+    const captionName = namedOtherLanguage(otherAutomaticCaption.languageCode, otherAutomaticCaption.name);
+    return captionName
+      ? "YouTube's automatic captions identify the spoken language as " + captionName + ", not " + targetLanguage.name + "."
+      : "YouTube's automatic captions identify another spoken language.";
   }
 
   function targetScriptPattern() {
@@ -812,6 +831,51 @@
       "ytd-comment-thread-renderer #content-text, ytd-comment-view-model #content-text, ytd-comment-renderer #content-text"
     )].map((element) => element.textContent?.trim() || "").filter(Boolean).slice(0, 12);
     return comments.length >= 3 && comments.every(looksPredominantlyTargetScript);
+  }
+
+  // Automatic mode has no target to compare against, so instead of asking "is
+  // this Japanese?" it asks "what is this?". Same evidence, same order of
+  // trust: selected audio, then the player's declared audio language, then
+  // auto-captions (which YouTube generates from the spoken audio), then the
+  // title's script. Player metadata only - nothing here listens to audio.
+  function identifyPageLanguage(info) {
+    for (const label of selectedAudioLabels()) {
+      const language = languageFromLabel(label);
+      if (language) return { ...language, evidence: "the selected audio track" };
+    }
+
+    const audioTracks = pageProbe.audioTracks || [];
+    const primaryTrack = audioTracks.find(
+      (track) => (track.audioIsDefault || audioTracks.length === 1) && isLanguageCode(track.languageCode)
+    );
+    if (primaryTrack) {
+      const language = languageFromCode(primaryTrack.languageCode) ||
+        languageFromLabel(primaryTrack.displayName);
+      if (language) return { ...language, evidence: "the player's audio track" };
+    }
+
+    const audioHint = (pageProbe.hints || []).find((hint) => {
+      const path = String(hint.path || "").toLowerCase();
+      return (path.includes("audio") || path.includes("defaultaudiolanguage")) && isLanguageCode(hint.value);
+    });
+    if (audioHint) {
+      const language = languageFromCode(audioHint.value);
+      if (language) return { ...language, evidence: "the page's declared audio language" };
+    }
+
+    const automaticCaption = (pageProbe.captions || []).find(
+      (track) => isAutomaticCaptionTrack(track) && isLanguageCode(track.languageCode)
+    );
+    if (automaticCaption) {
+      const language = languageFromCode(automaticCaption.languageCode) ||
+        languageFromLabel(automaticCaption.name);
+      if (language) return { ...language, evidence: "the automatic captions" };
+    }
+
+    const fromTitle = languageFromScript(info?.title);
+    if (fromTitle?.name) return { ...fromTitle, evidence: "the title's script" };
+
+    return null;
   }
 
   function detectTargetLanguage(info) {
@@ -918,12 +982,114 @@
     resetSampling(currentVideo);
   }
 
+  // Player metadata arrives late and in pieces, so an unanswered question is
+  // re-asked whenever the probe reports something new.
+  function retryDetection(states) {
+    if (!currentInfo || !isVideoPlaying(currentVideo)) return;
+    if (!states.includes(languageState)) return;
+    if (isAutomaticLanguageMode()) {
+      // This runs every second. Re-running the whole resolver while the user is
+      // looking at the language picker would re-fetch the ranking and rebuild
+      // the card's HTML underneath them, resetting the dropdown each tick. Only
+      // the cheap synchronous identification is safe to retry here.
+      if (languageState === "awaiting-language") {
+        const identified = identifyPageLanguage(currentInfo);
+        if (identified) confirmAutomaticLanguage(identified, identified.evidence);
+        return;
+      }
+      resolveAutomaticLanguage(currentInfo);
+      return;
+    }
+    if (overlayPreferences.fullyManualEnabled) return;
+    applyDetectionResult(detectTargetLanguage(currentInfo));
+  }
+
+  function confirmAutomaticLanguage(language, evidence) {
+    // Invalidate any resolver still waiting on a message.
+    automaticResolutionSequence += 1;
+    detectedLanguage = { code: language.code, name: language.name };
+    commitUnconfirmedBuffer();
+    languageState = "confirmed";
+    detectionReason = `Detected as ${language.name} from ${evidence}.`;
+    cancelAutoMinimize();
+    showExpandedOverlay();
+    resetSampling(currentVideo);
+  }
+
+  // Automatic mode books time under the language it identifies, never under a
+  // literal "auto" bucket. A remembered answer wins over fresh detection,
+  // because the user has already corrected us for this video or channel.
+  async function resolveAutomaticLanguage(info) {
+    // Each run claims a sequence number. Anything the user does while a message
+    // is in flight starts a newer run, and the straggler must not write its
+    // stale conclusion over the answer the user just gave.
+    const run = ++automaticResolutionSequence;
+    const stale = () =>
+      run !== automaticResolutionSequence ||
+      !currentInfo ||
+      currentInfo.contentKey !== info.contentKey;
+
+    // "Don't count this video" outranks a remembered language: it is the more
+    // recent instruction whenever both exist for the same video.
+    const declined = await sendMessage({
+      type: "getDecision",
+      contentKey: info.contentKey,
+      sourceKey: info.sourceKey,
+      languageCode: "auto"
+    });
+    if (stale()) return;
+    if (declined?.decision === "not-target") {
+      discardUnconfirmedBuffer();
+      languageState = "rejected";
+      detectionReason = "You chose not to count this video.";
+      if (!overlayManuallyShown) overlay.host.style.display = "none";
+      renderOverlay();
+      return;
+    }
+
+    const remembered = await sendMessage({
+      type: "getAutomaticLanguageChoice",
+      contentKey: info.contentKey,
+      sourceKey: info.sourceKey
+    });
+    if (stale()) return;
+
+    if (remembered?.code) {
+      confirmAutomaticLanguage(
+        { code: remembered.code, name: remembered.name },
+        remembered.scope === "source"
+          ? `your answer for ${info.sourceLabel || "this source"}`
+          : "your answer for this video"
+      );
+      return;
+    }
+
+    const identified = identifyPageLanguage(info);
+    if (identified) {
+      confirmAutomaticLanguage(identified, identified.evidence);
+      return;
+    }
+
+    const ranking = (await sendMessage({ type: "getLanguageRanking" }))?.languages || [];
+    if (stale()) return;
+    languageChoices = ranking;
+    languageState = "awaiting-language";
+    detectionReason = isStreamingSite
+      ? `${streamingSite?.name || "This site"} did not expose a spoken audio language.`
+      : "This page does not declare a spoken audio language.";
+    cancelAutoMinimize();
+    overlayCompact = false;
+    renderOverlay();
+    resetSampling(currentVideo);
+  }
+
   async function resolveLanguage(info) {
     if (!isVideoPlaying(currentVideo)) return;
 
     languageState = "checking";
     statusPausedByUser = false;
     sourceSuggestion = false;
+    detectedLanguage = null;
     renderOverlay();
 
     if (overlayPreferences.targetLanguageDeferred || targetLanguage.code === "und") {
@@ -932,6 +1098,15 @@
       detectionReason = "Choose a target language in the extension before tracking.";
       overlay.host.style.display = "none";
       renderOverlay();
+      return;
+    }
+
+    // Automatic mode identifies the language instead of testing against one, so
+    // it skips the target-based decision flow below. It also outranks fully
+    // manual counting: "count everything" still needs a language to count under,
+    // and "Automatic" is a mode, not a language.
+    if (isAutomaticLanguageMode()) {
+      await resolveAutomaticLanguage(info);
       return;
     }
 
@@ -988,7 +1163,7 @@
 
   async function monitorStreamingAudioLanguage() {
     if (
-      overlayPreferences.fullyManualEnabled ||
+      (overlayPreferences.fullyManualEnabled && !isAutomaticLanguageMode()) ||
       !isStreamingSite ||
       !currentInfo ||
       !isVideoPlaying(currentVideo)
@@ -998,6 +1173,21 @@
     const signature = labels.join("|").toLocaleLowerCase();
     if (signature === lastStreamingAudioSignature) return;
     lastStreamingAudioSignature = signature;
+
+    // Switching the audio track in Automatic mode switches the language time is
+    // booked under. Flush first so the time already counted stays with the
+    // language it was actually spoken in.
+    if (isAutomaticLanguageMode()) {
+      // Only follow the audio track while we are actually counting. Without
+      // this, changing tracks on a video the user declined would silently
+      // resume recording it, and would answer the language prompt for them.
+      if (!["confirmed", "checking"].includes(languageState)) return;
+      const identified = identifyPageLanguage(currentInfo);
+      if (!identified || identified.code === detectedLanguage?.code) return;
+      await flushTicks();
+      confirmAutomaticLanguage(identified, identified.evidence);
+      return;
+    }
 
     const detection = detectTargetLanguage(currentInfo);
     if (!["high", "not-target"].includes(detection.confidence)) return;
@@ -1062,7 +1252,9 @@
   }
 
   function playbackStateAllowsBuffering(video) {
-    return playbackStateAllowsSampling(video) && ["checking", "awaiting"].includes(languageState);
+    // "awaiting-language" is Automatic mode's prompt; hold its time the same way.
+    return playbackStateAllowsSampling(video) &&
+      ["checking", "awaiting", "awaiting-language"].includes(languageState);
   }
 
   function samplePlayback() {
@@ -1126,7 +1318,9 @@
         lastFlushAt = performance.now();
         const tickSessionId = sessionId;
         const tickInfo = currentInfo;
-        const tickLanguageCode = targetLanguage.code;
+        // In Automatic mode this is the identified language, not "auto" - the
+        // background refuses to file time under a mode name.
+        const tickLanguageCode = activeLanguage().code;
 
         const response = await sendMessage({
           type: "addTick",
@@ -1157,6 +1351,22 @@
 
   async function confirmTargetLanguage(scope = "") {
     if (!currentInfo) return;
+    // Automatic mode has no single target to confirm - re-run identification,
+    // which falls through to the language picker if it still finds nothing.
+    if (isAutomaticLanguageMode()) {
+      // Clear any remembered "don't count this" so re-resolving is not
+      // immediately overruled by the answer the user just changed their mind on.
+      await sendMessage({
+        type: "saveDecision",
+        scope: scope === "source" && currentInfo.sourceKey ? "source" : "content",
+        decision: "target",
+        languageCode: "auto",
+        contentKey: currentInfo.contentKey,
+        sourceKey: currentInfo.sourceKey
+      });
+      await resolveAutomaticLanguage(currentInfo);
+      return;
+    }
     if (overlayPreferences.fullyManualEnabled) {
       commitUnconfirmedBuffer();
       languageState = "confirmed";
@@ -1187,15 +1397,42 @@
     renderOverlay();
   }
 
+  // Automatic mode's answer to "which language is this?". Remembered so the same
+  // video, or the whole channel, stops asking.
+  async function confirmAutomaticLanguageChoice(choice, scope = "content") {
+    if (!currentInfo) return;
+    const effectiveScope = scope === "source" && currentInfo.sourceKey ? "source" : "content";
+    await sendMessage({
+      type: "saveAutomaticLanguageChoice",
+      scope: effectiveScope,
+      code: choice.code,
+      name: choice.name,
+      contentKey: currentInfo.contentKey,
+      sourceKey: currentInfo.sourceKey
+    });
+    confirmAutomaticLanguage(
+      choice,
+      effectiveScope === "source"
+        ? `your answer for ${currentInfo.sourceLabel || "this source"}`
+        : "your answer for this video"
+    );
+    renderOverlay();
+  }
+
   async function rejectTargetLanguage({ rollback = true, scope = "" } = {}) {
     if (!currentInfo) return;
-    if (overlayPreferences.fullyManualEnabled) {
+    // Automatic mode always allows declining a video: it is the only way to say
+    // "this is not immersion", since there is no target language to fail.
+    if (overlayPreferences.fullyManualEnabled && !isAutomaticLanguageMode()) {
       detectionReason = "Fully manual counting is on. Turn it off in Tracker Settings to exclude this video.";
       renderOverlay();
       return;
     }
     const requestedScope = scope || currentInfo.decisionScope || "content";
     const effectiveScope = requestedScope === "source" && currentInfo.sourceKey ? "source" : "content";
+    // Invalidate any Automatic-mode resolver still waiting on a message, so it
+    // cannot re-confirm the video the user is declining right now.
+    automaticResolutionSequence += 1;
     discardUnconfirmedBuffer();
     await flushTicks();
     languageState = "rejected";
@@ -1216,9 +1453,13 @@
       sourceKey: currentInfo.sourceKey
     });
     sourceSuggestion = false;
-    detectionReason = rollback
-      ? `Marked as not ${targetLanguage.name}. This session's time was removed.`
-      : `Marked as not ${targetLanguage.name}. The unconfirmed playback time was discarded.`;
+    detectionReason = isAutomaticLanguageMode()
+      ? (rollback
+        ? "This video will not be counted. This session's time was removed."
+        : "This video will not be counted. The unconfirmed playback time was discarded.")
+      : (rollback
+        ? `Marked as not ${activeLanguage().name}. This session's time was removed.`
+        : `Marked as not ${activeLanguage().name}. The unconfirmed playback time was discarded.`);
     overlay.host.style.display = "none";
     renderOverlay();
   }
@@ -1311,12 +1552,8 @@
     // begin only after the page has a real media element that is playing.
     if (currentInfo && languageState === "idle" && isVideoPlaying(currentVideo)) {
       await resolveLanguage(currentInfo);
-    } else if (
-      currentInfo &&
-      ["not-candidate", "awaiting"].includes(languageState) &&
-      isVideoPlaying(currentVideo)
-    ) {
-      applyDetectionResult(detectTargetLanguage(currentInfo));
+    } else {
+      retryDetection(["not-candidate", "awaiting", "awaiting-language"]);
     }
 
     await monitorStreamingAudioLanguage();
@@ -1371,6 +1608,19 @@
         .stat { background: rgba(30, 41, 59, 0.85); padding: 8px 9px; border-radius: 9px; }
         .stat-label { color: #94a3b8; font-size: 11px; }
         .stat-value { margin-top: 2px; font-weight: 700; }
+        .language-picker { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; color: #94a3b8; font-size: 11px; }
+        .language-picker select {
+          width: 100%;
+          border: 1px solid #475569;
+          border-radius: 9px;
+          padding: 7px 9px;
+          background: #1e293b;
+          color: #f8fafc;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 650;
+          cursor: pointer;
+        }
         .buttons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
         .recovery-buttons { display: flex; gap: 5px; width: 100%; }
         .recovery-buttons button { padding-left: 8px; padding-right: 8px; }
@@ -1418,6 +1668,8 @@
         :host([data-theme="light"]) .muted,
         :host([data-theme="light"]) .stat-label { color: #65758b; }
         :host([data-theme="light"]) .stat { background: #edf2f7; }
+        :host([data-theme="light"]) .language-picker { color: #65758b; }
+        :host([data-theme="light"]) .language-picker select { border-color: #cbd5e1; background: #fff; color: #172033; }
         :host([data-theme="light"]) button { background: #e2e8f0; color: #172033; }
         :host([data-theme="light"]) button:hover { background: #cfd9e6; }
         :host([data-theme="light"]) button.primary { background: #2563eb; color: #fff; }
@@ -1669,7 +1921,39 @@
       return;
     }
 
-    if (languageState === "awaiting") {
+    if (languageState === "awaiting-language") {
+      cancelAutoMinimize();
+      overlayCompact = false;
+      if (!isVideoPlaying(currentVideo) && !overlayManuallyShown) {
+        overlay.host.style.display = "none";
+        return;
+      }
+      overlay.host.style.display = "block";
+      const used = languageChoices.filter((entry) => entry.used);
+      const rest = languageChoices.filter((entry) => !entry.used);
+      const optionsFor = (entries) => entries
+        .map((entry) => `<option value="${escapeHtml(entry.code)}">${escapeHtml(entry.name)}</option>`)
+        .join("");
+      overlay.card.innerHTML = `
+        <div class="row drag-handle">
+          <span class="dot waiting"></span>
+          <div class="title">No language could be detected</div>
+        </div>
+        <div class="reason">${escapeHtml(detectionReason)} Do you want to count this? Playback time is held temporarily until you answer.</div>
+        <label class="language-picker">
+          <span>Count this as</span>
+          <select data-action="language-choice" aria-label="Language for this video">
+            ${used.length ? `<optgroup label="Your languages">${optionsFor(used)}</optgroup>` : ""}
+            ${rest.length ? `<optgroup label="All languages">${optionsFor(rest)}</optgroup>` : ""}
+          </select>
+        </label>
+        <div class="buttons">
+          <button class="primary" data-action="count-language">Count this video</button>
+          ${currentInfo.sourceKey ? `<button data-action="count-language-always">Always for ${escapeHtml(currentInfo.sourceLabel || "this source")}</button>` : ""}
+          <button class="danger" data-action="no">Don't count this video</button>
+        </div>
+      `;
+    } else if (languageState === "awaiting") {
       cancelAutoMinimize();
       overlayCompact = false;
       if (!isVideoPlaying(currentVideo) && !overlayManuallyShown) {
@@ -1696,7 +1980,8 @@
       const mode = recordingMode();
       const audible = currentVideo ? hasAudibleSound(currentVideo) : false;
       const playing = currentVideo && !currentVideo.paused && !currentVideo.ended;
-      const languageName = targetLanguage.name;
+      // In Automatic mode this is the identified language, not "Automatic (Pro)".
+      const languageName = activeLanguage().name;
       const label = statusPausedByUser
         ? "Tracking paused"
         : mode === "active"
@@ -1737,7 +2022,7 @@
     } else if (["rejected", "not-candidate", "primary-other"].includes(languageState)) {
       const stoppedLabel = languageState === "rejected"
         ? "Not tracking this video"
-        : "Automatic detection did not mark this as " + targetLanguage.name;
+        : "Automatic detection did not mark this as " + activeLanguage().name;
       overlay.card.innerHTML = `
         <div class="row drag-handle">
           <span class="dot stopped"></span>
@@ -1782,6 +2067,14 @@
       });
       renderOverlay();
     });
+    const chooseLanguage = (scope) => {
+      const select = overlay.card.querySelector('[data-action="language-choice"]');
+      const code = select?.value || "";
+      const choice = languageChoices.find((entry) => entry.code === code);
+      if (choice) confirmAutomaticLanguageChoice(choice, scope);
+    };
+    overlay.card.querySelector('[data-action="count-language"]')?.addEventListener("click", () => chooseLanguage("content"));
+    overlay.card.querySelector('[data-action="count-language-always"]')?.addEventListener("click", () => chooseLanguage("source"));
     overlay.card.querySelector('[data-action="no"]')?.addEventListener("click", () => rejectTargetLanguage({ rollback: false }));
     overlay.card.querySelector('[data-action="wrong"]')?.addEventListener("click", () => rejectTargetLanguage({ rollback: true }));
     overlay.card.querySelector('[data-action="reconnect"]')?.addEventListener("click", reconnectTracker);
@@ -1811,7 +2104,7 @@
   function sendStatus() {
     const mode = recordingMode();
     const state =
-      languageState === "awaiting"
+      ["awaiting", "awaiting-language"].includes(languageState)
         ? "awaiting"
         : mode === "active"
           ? "recording-active"
@@ -1825,8 +2118,11 @@
         state,
         languageState,
         targetLanguage: { ...targetLanguage },
-        languageCode: targetLanguage.code,
-        languageName: targetLanguage.name,
+        // What time is actually being booked under, which in Automatic mode is
+        // the identified language rather than the mode itself.
+        languageCode: activeLanguage().code,
+        languageName: activeLanguage().name,
+        detectedLanguage: detectedLanguage ? { ...detectedLanguage } : null,
         site,
         title: currentInfo?.title || "",
         contentKey: currentInfo?.contentKey || "",

@@ -56,6 +56,15 @@ function normalizeLanguageCode(value) {
   return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(code) ? code.slice(0, 24) : "ja";
 }
 
+// normalizeLanguageCode answers "ja" for anything it cannot parse, which makes
+// "no code was supplied" indistinguishable from "Japanese". Callers that need
+// to fall back to something else must use this instead.
+function strictLanguageCode(value) {
+  const code = String(value || "").trim().toLowerCase().replace(/_/g, "-");
+  if (code === "auto") return "auto";
+  return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(code) ? code.slice(0, 24) : "";
+}
+
 function normalizeTargetLanguage(value) {
   const input = typeof value === "string" ? { code: value } : (value || {});
   const code = normalizeLanguageCode(input.code || DEFAULT_TARGET_LANGUAGE.code);
@@ -151,10 +160,18 @@ const emptyState = () => ({
     source: {}
   },
   sourceLearning: {},
+  // Automatic mode identifies the spoken language per video. When the player
+  // exposes nothing usable the user names it, and that answer is remembered
+  // here, keyed the same opaque way as decisions.
+  automaticLanguage: {
+    content: {},
+    source: {}
+  },
   sync: {
     dirtyMonths: {},
     lastSyncedAt: 0,
-    lastResetSeen: 0
+    lastResetSeen: 0,
+    lastError: ""
   },
   maintenance: {
     lastCompactedAt: 0,
@@ -242,6 +259,80 @@ function normalizeStoredDecisionMap(value) {
       : decisionStorageKey(languageCode, rawKey);
     const safeDecision = normalizeDecision(decision);
     if (safeDecision) normalized[key] = safeDecision;
+  }
+  return normalized;
+}
+
+// "auto" is a mode, never a storage bucket: time recorded while Automatic is
+// selected belongs to whichever language was identified for that video.
+function isStorableLanguageCode(value) {
+  const code = normalizeLanguageCode(value);
+  return Boolean(code) && code !== "auto" && code !== "und";
+}
+
+// Languages the user actually immerses in, most recorded time first.
+function languageRanking(state) {
+  const seconds = new Map();
+  const add = (code, value) => {
+    if (!isStorableLanguageCode(code)) return;
+    const key = normalizeLanguageCode(code);
+    seconds.set(key, (seconds.get(key) || 0) + (Number(value) || 0));
+  };
+  for (const [code, sources] of Object.entries(state.sourceTotals || {})) {
+    for (const totals of Object.values(sources || {})) {
+      add(code, (Number(totals?.active) || 0) + (Number(totals?.passive) || 0));
+    }
+  }
+  for (const [code, records] of Object.entries(state.languageRecords || {})) {
+    if (seconds.has(normalizeLanguageCode(code))) continue;
+    for (const record of Object.values(records || {})) {
+      add(code, (Number(record?.active) || 0) + (Number(record?.passive) || 0));
+    }
+  }
+  const nameFor = (code) =>
+    state.preferences?.languageNames?.[code] || LANGUAGE_NAMES[code] ||
+    LANGUAGE_NAMES[code.split("-")[0]] || code.toUpperCase();
+  const used = [...seconds.entries()]
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([code]) => ({ code, name: nameFor(code), used: true }));
+  const usedCodes = new Set(used.map((entry) => entry.code));
+  const rest = Object.keys(LANGUAGE_NAMES)
+    .filter((code) => isStorableLanguageCode(code) && !usedCodes.has(code))
+    .map((code) => ({ code, name: LANGUAGE_NAMES[code], used: false }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [...used, ...rest];
+}
+
+// Manual time has no page to identify, so in Automatic mode it falls back to
+// the language the user immerses in most. It is never filed under "auto".
+function manualLanguageCode(state, requested) {
+  const asked = strictLanguageCode(requested);
+  if (isStorableLanguageCode(asked)) return asked;
+  const target = strictLanguageCode(state.preferences?.targetLanguage?.code);
+  if (isStorableLanguageCode(target)) return target;
+  const ranked = languageRanking(state).find((entry) => entry.used);
+  return ranked?.code || DEFAULT_TARGET_LANGUAGE.code;
+}
+
+// Time already booked under a bucket has to be removed from that same bucket,
+// including the legacy "auto" bucket written before Automatic mode identified
+// languages. Only a session with no code at all gets a fresh fallback.
+function sessionLanguageCode(state, languageCode) {
+  return strictLanguageCode(languageCode) || manualLanguageCode(state);
+}
+
+function normalizeStoredAutomaticLanguageMap(value) {
+  const normalized = {};
+  for (const [storedKey, entry] of Object.entries(value || {})) {
+    const key = String(storedKey || "").trim();
+    const code = normalizeLanguageCode(typeof entry === "string" ? entry : entry?.code);
+    if (!key || !isStorableLanguageCode(code)) continue;
+    normalized[key] = {
+      code,
+      name: normalizeTargetLanguage({ code, name: entry?.name }).name,
+      at: Number(entry?.at) || 0
+    };
   }
   return normalized;
 }
@@ -404,6 +495,10 @@ function normalizeState(stored, options = {}) {
       source: normalizeStoredDecisionMap(stored.decisions?.source)
     },
     sourceLearning: normalizeStoredSourceLearning(stored.sourceLearning),
+    automaticLanguage: {
+      content: normalizeStoredAutomaticLanguageMap(stored.automaticLanguage?.content),
+      source: normalizeStoredAutomaticLanguageMap(stored.automaticLanguage?.source)
+    },
     sync: {
       ...emptyState().sync,
       ...(stored.sync || {})
@@ -701,7 +796,9 @@ function addSessionDelta(state, sessionId, details) {
 
 function applySessionContribution(state, session, multiplier) {
   for (const [dateKey, contribution] of Object.entries(session?.byDate || {})) {
-    const code = normalizeLanguageCode(session.languageCode || "ja");
+    // Sessions recorded before language support existed carry no code; fall back
+    // to a real current language, not the Japanese-only origin's "ja".
+    const code = sessionLanguageCode(state, session.languageCode);
     const site = normalizeManualSource(session.site);
     const record = multiplier > 0
       ? ensureRecord(state, dateKey, site, code)
@@ -862,6 +959,13 @@ function manualTimeSegments(startTimestamp, endTimestamp) {
 }
 
 function checkpointManualTimer({ stop = false } = {}) {
+  return bankManualTimer({ stop }).then((result) => {
+    setManualTimerBadge(result?.timer);
+    return result;
+  });
+}
+
+function bankManualTimer({ stop = false } = {}) {
   const now = Date.now();
   return updateState((state) => {
     const timer = state.manualTimer;
@@ -1015,6 +1119,55 @@ async function writeSyncedDecision(scope, key, decision) {
   }
 }
 
+function formatSyncBytes(bytes) {
+  if (bytes >= 1024) return (bytes / 1024).toFixed(1).replace(/\.0$/, "") + "KB";
+  return bytes + " bytes";
+}
+
+// Chrome charges an item against QUOTA_BYTES_PER_ITEM as key + JSON value.
+function syncItemBytes(key, value) {
+  try {
+    return key.length + JSON.stringify(value).length;
+  } catch {
+    return key.length;
+  }
+}
+
+function largestSyncItem(payload) {
+  let largest = null;
+  for (const [key, value] of Object.entries(payload || {})) {
+    const bytes = syncItemBytes(key, value);
+    if (!largest || bytes > largest.bytes) largest = { key, bytes };
+  }
+  return largest;
+}
+
+// chrome.storage.sync reports failures as opaque quota strings. Translate them
+// into the limit that was actually hit, so the popup can name it instead of
+// guessing between "connection or storage quota".
+function describeSyncFailure(error, payload) {
+  const raw = String(
+    error?.message || chrome.runtime?.lastError?.message || error || ""
+  ).replace(/\s+/g, " ").trim();
+
+  if (/QUOTA_BYTES_PER_ITEM/i.test(raw)) {
+    const largest = largestSyncItem(payload);
+    return largest
+      ? `One entry is over Chrome Sync's 8KB per-item limit (${largest.key} is ${formatSyncBytes(largest.bytes)}).`
+      : "One entry is over Chrome Sync's 8KB per-item limit.";
+  }
+  if (/QUOTA_BYTES/i.test(raw)) return "Chrome Sync storage is full — you are at the 100KB total limit.";
+  if (/MAX_ITEMS/i.test(raw)) return "Chrome Sync is holding too many separate entries — the limit is 512.";
+  if (/MAX_WRITE_OPERATIONS_PER_MINUTE|MAX_SUSTAINED_WRITE/i.test(raw)) {
+    return "Too many sync writes in one minute — the limit is 120. Try again in a minute.";
+  }
+  if (/MAX_WRITE_OPERATIONS_PER_HOUR/i.test(raw)) {
+    return "Too many sync writes this hour — the limit is 1800. Try again later.";
+  }
+  if (/sign|disabled|not available|unavailable/i.test(raw)) return "Chrome Sync is turned off or signed out.";
+  return raw ? `Chrome Sync refused the write: ${raw}` : "Chrome Sync did not respond.";
+}
+
 async function flushDirtyMonths({ force = false } = {}) {
   syncQueue = syncQueue.then(async () => {
     const deviceId = await getDeviceId();
@@ -1022,7 +1175,17 @@ async function flushDirtyMonths({ force = false } = {}) {
     const retainedMonths = new Set(recentMonthKeys());
     const allDirtyMonths = Object.keys(state.sync.dirtyMonths || {});
     const months = allDirtyMonths.filter((month) => retainedMonths.has(month));
-    if (!allDirtyMonths.length && !force) return { ok: true, synced: 0, skipped: true };
+    if (!allDirtyMonths.length && !force) {
+      // Nothing is waiting to be written, so a past failure no longer describes
+      // reality - leaving it set pins a stale error to the top of the popup.
+      if (state.sync.lastError) {
+        await updateState((latest) => {
+          latest.sync.lastError = "";
+          return { ok: true };
+        }).catch(() => null);
+      }
+      return { ok: true, synced: 0, skipped: true };
+    }
 
     const payload = {};
     for (const month of months) {
@@ -1057,12 +1220,25 @@ async function flushDirtyMonths({ force = false } = {}) {
         for (const month of allDirtyMonths) delete latest.sync.dirtyMonths[month];
         const lastSyncedAt = Date.now();
         latest.sync.lastSyncedAt = lastSyncedAt;
+        latest.sync.lastError = "";
         return { ok: true, lastSyncedAt };
       });
-      if (!saved?.ok) return { ok: false, synced: months.length, reason: saved?.reason || "local-save-failed" };
+      if (!saved?.ok) {
+        return {
+          ok: false,
+          synced: months.length,
+          reason: saved?.reason || "local-save-failed",
+          message: "Your device could not save the sync result locally."
+        };
+      }
       return { ok: true, synced: months.length, sourceTotalsSynced: true, lastSyncedAt: saved.lastSyncedAt };
-    } catch {
-      return { ok: false, synced: 0, reason: "chrome-sync-unavailable" };
+    } catch (error) {
+      const message = describeSyncFailure(error, payload);
+      await updateState((latest) => {
+        latest.sync.lastError = message.slice(0, 180);
+        return { ok: true };
+      }).catch(() => null);
+      return { ok: false, synced: 0, reason: "chrome-sync-unavailable", message };
     }
   });
   return syncQueue;
@@ -1077,6 +1253,28 @@ function mergeRecordInto(target, dateKey, record) {
     target[dateKey].sites[site].active += Number(values?.active) || 0;
     target[dateKey].sites[site].passive += Number(values?.passive) || 0;
   }
+}
+
+// Every bucket folded into one set of daily records, including the legacy
+// "auto" bucket written before Automatic mode identified languages. Nothing
+// writes there any more, but that time was really immersed and must not vanish
+// from the one view that means "all of it". Legacy top-level records are
+// Japanese, and are only added if no "ja" bucket already holds them.
+function mergedLanguageRecords(languageRecords, legacyRecords) {
+  const merged = {};
+  const buckets = languageRecords || {};
+  for (const [code, records] of Object.entries(buckets)) {
+    if (!isStorableLanguageCode(code) && normalizeLanguageCode(code) !== "auto") continue;
+    for (const [dateKey, record] of Object.entries(records || {})) {
+      mergeRecordInto(merged, dateKey, record);
+    }
+  }
+  if (!buckets.ja) {
+    for (const [dateKey, record] of Object.entries(legacyRecords || {})) {
+      mergeRecordInto(merged, dateKey, record);
+    }
+  }
+  return merged;
 }
 
 async function getCombinedRecords(localState, deviceId, languageCode) {
@@ -1095,7 +1293,11 @@ async function getCombinedRecords(localState, deviceId, languageCode) {
     for (const [key, item] of Object.entries(allSync)) {
       if (!key.startsWith(SYNC_RECORD_PREFIX)) continue;
       if (!item || item.deviceId === deviceId) continue;
-      const remoteRecords = item.languageRecords?.[code] || (code === "ja" ? item.records : null) || {};
+      // Automatic is a mode, not a language, so its dashboard is every language
+      // the user has actually recorded, added together.
+      const remoteRecords = code === "auto"
+        ? mergedLanguageRecords(item.languageRecords, item.records)
+        : (item.languageRecords?.[code] || (code === "ja" ? item.records : null) || {});
       for (const [dateKey, record] of Object.entries(remoteRecords)) {
         mergeRecordInto(combined, dateKey, record);
       }
@@ -1104,8 +1306,9 @@ async function getCombinedRecords(localState, deviceId, languageCode) {
     // Continue with local records only.
   }
 
-  const localRecords = localState.languageRecords?.[code] ||
-    (code === "ja" ? localState.records : null) || {};
+  const localRecords = code === "auto"
+    ? mergedLanguageRecords(localState.languageRecords, localState.records)
+    : (localState.languageRecords?.[code] || (code === "ja" ? localState.records : null) || {});
   for (const [dateKey, record] of Object.entries(localRecords)) {
     mergeRecordInto(combined, dateKey, record);
   }
@@ -1124,16 +1327,25 @@ async function getCombinedSourceTotals(localState, deviceId, languageCode) {
       combined[source].passive += Number(values?.passive) || 0;
     }
   };
+  // Automatic mode reports across every language, matching its records view.
+  const mergeAll = (byLanguage) => {
+    if (code !== "auto") return merge(byLanguage?.[code]);
+    // Includes the legacy "auto" bucket, for the same reason as the records.
+    for (const [languageBucket, totals] of Object.entries(byLanguage || {})) {
+      const bucket = normalizeLanguageCode(languageBucket);
+      if (isStorableLanguageCode(bucket) || bucket === "auto") merge(totals);
+    }
+  };
   try {
     const allSync = await chrome.storage.sync.get(null);
     for (const [key, item] of Object.entries(allSync)) {
       if (!key.startsWith(SYNC_SOURCE_TOTAL_PREFIX) || item?.deviceId === deviceId) continue;
-      merge(item?.sourceTotals?.[code]);
+      mergeAll(item?.sourceTotals);
     }
   } catch {
     // Local cumulative source totals remain available if Sync cannot be read.
   }
-  merge(localState.sourceTotals?.[code]);
+  mergeAll(localState.sourceTotals);
   return combined;
 }
 
@@ -1188,6 +1400,37 @@ async function setBadge(tabId, status) {
   } catch {
     // The tab may have closed.
   }
+}
+
+// The manual timer runs whatever tab you are on, so its badge is global rather
+// than per-tab. A playback tab's own A/P badge still overrides it there, which
+// is right: that tab really is recording something else.
+async function setManualTimerBadge(timer) {
+  try {
+    if (!timer?.running) {
+      await chrome.action.setBadgeText({ text: "" });
+      // Restore the manifest's title. Passing "" would blank it permanently,
+      // and this runs on every service worker start, timer or no timer.
+      await chrome.action.setTitle({
+        title: chrome.runtime.getManifest()?.action?.default_title || "Language Immersion Tracker"
+      });
+      return;
+    }
+    const minutes = Math.floor((Number(timer.elapsedSeconds) || 0) / 60);
+    await chrome.action.setBadgeText({ text: "M" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#7c3aed" });
+    await chrome.action.setTitle({
+      title: `Manual timer running (${timer.mode === "passive" ? "passive" : "active"}) - ` +
+        (minutes ? `${minutes}m recorded so far` : "under a minute so far")
+    });
+  } catch {
+    // The action may be unavailable while the worker is shutting down.
+  }
+}
+
+async function refreshManualTimerBadge() {
+  const state = await readState();
+  await setManualTimerBadge(manualTimerSnapshot(state.manualTimer));
 }
 
 async function refreshTabContext(tabId) {
@@ -1255,6 +1498,8 @@ async function clearReadableSyncedDecisionHistory() {
 function ensureSyncAlarm() {
   chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 1 });
   chrome.alarms.create(MANUAL_ALARM, { periodInMinutes: 1 });
+  // The service worker restarts constantly; the badge has to be re-asserted.
+  refreshManualTimerBadge().catch(() => null);
   chrome.alarms.create(WEEKLY_REVIEW_ALARM, { when: nextWeeklyReviewAt(), periodInMinutes: 7 * 24 * 60 });
   chrome.alarms.create(CLOUD_UPLOAD_ALARM, { periodInMinutes: 3 });
   try {
@@ -2218,7 +2463,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const selectedDate = parseLocalDateKey(message.date || localDateKey());
       if (!selectedDate || selectedDate > localDateKey()) return { ok: false, reason: "invalid-date" };
       const timestamp = new Date(selectedDate + "T12:00:00").getTime();
-      const code = normalizeLanguageCode(languageCode || state.preferences.targetLanguage.code);
+      const code = manualLanguageCode(state, languageCode);
       const source = normalizeManualSource(message.source);
       const action = normalizeManualAction(message.action);
       const mode = normalizeManualMode(message.mode);
@@ -2255,7 +2500,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const action = normalizeManualAction(message.action);
       const mode = normalizeManualMode(message.mode || state.preferences.lastManualMode);
       const now = Date.now();
-      const languageCode = normalizeLanguageCode(message.languageCode || state.preferences.targetLanguage.code);
+      const languageCode = manualLanguageCode(state, message.languageCode);
       state.preferences.lastManualSource = source;
       state.preferences.lastManualAction = action;
       state.preferences.lastManualMode = mode;
@@ -2271,7 +2516,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         committedSeconds: 0
       };
       return { ok: true, timer: manualTimerSnapshot(state.manualTimer, now) };
-    }).then(sendResponse);
+    }).then((result) => {
+      setManualTimerBadge(result?.timer);
+      sendResponse(result);
+    });
+    return true;
+  }
+
+  // Bank everything counted so far without stopping, so a long session is not
+  // riding on the extension surviving until the user remembers to stop it.
+  if (message.type === "saveManualTimerProgress") {
+    checkpointManualTimer().then(async (result) => {
+      if (result?.timer?.languageCode) await notifyGoalCompletions(result.timer.languageCode);
+      sendResponse(result);
+    });
     return true;
   }
 
@@ -2289,7 +2547,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return updateState((latest) => {
         const source = normalizeManualSource(latest.preferences.lastManualSource);
         const mode = normalizeManualMode(latest.preferences.lastManualMode);
-        const languageCode = normalizeLanguageCode(latest.preferences.targetLanguage.code);
+        const languageCode = manualLanguageCode(latest);
         const now = Date.now();
         latest.manualTimer = {
           id: String(now) + "-" + Math.random().toString(36).slice(2, 9),
@@ -2304,7 +2562,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
         return { ok: true, timer: manualTimerSnapshot(latest.manualTimer, now) };
       });
-    }).then(sendResponse);
+    }).then((result) => {
+      setManualTimerBadge(result?.timer);
+      sendResponse(result);
+    });
     return true;
   }
 
@@ -2351,6 +2612,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       return { decision: normalizeDecision(decision), scope };
     })().then(sendResponse);
+    return true;
+  }
+
+  // Automatic mode: what did the user last say this video, or this channel, was?
+  if (message.type === "getAutomaticLanguageChoice") {
+    (async () => {
+      const state = await readState();
+      const contentKey = message.contentKey ? opaqueStorageKey(message.contentKey) : "";
+      const sourceKey = message.sourceKey ? opaqueStorageKey(message.sourceKey) : "";
+      const content = contentKey ? state.automaticLanguage?.content?.[contentKey] : null;
+      if (content) return { ok: true, scope: "content", code: content.code, name: content.name };
+      const source = sourceKey ? state.automaticLanguage?.source?.[sourceKey] : null;
+      if (source) return { ok: true, scope: "source", code: source.code, name: source.name };
+      return { ok: true, scope: null, code: "", name: "" };
+    })().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "saveAutomaticLanguageChoice") {
+    (async () => {
+      const scope = message.scope === "source" ? "source" : "content";
+      const rawKey = scope === "source" ? message.sourceKey : message.contentKey;
+      if (!rawKey || !isStorableLanguageCode(message.code)) return { ok: false };
+      const language = normalizeTargetLanguage({ code: message.code, name: message.name });
+      const key = opaqueStorageKey(rawKey);
+      return updateState((state) => {
+        state.automaticLanguage ||= { content: {}, source: {} };
+        state.automaticLanguage[scope] ||= {};
+        state.automaticLanguage[scope][key] = { ...language, at: Date.now() };
+        state.preferences.languageNames[language.code] = language.name;
+        return { ok: true, ...language };
+      });
+    })().then(sendResponse);
+    return true;
+  }
+
+  // Languages the user actually immerses in, most time first, so Automatic
+  // mode's "which language is this?" prompt opens on a likely answer.
+  if (message.type === "getLanguageRanking") {
+    (async () => ({ ok: true, languages: languageRanking(await readState()) }))().then(sendResponse);
     return true;
   }
 
@@ -2459,6 +2760,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const site = message.site || "other";
         const languageCode = normalizeLanguageCode(message.languageCode || state.preferences.targetLanguage.code);
+        // Automatic mode resolves to a real language before any time is sent.
+        // If it has not, hold the time rather than inventing an "auto" bucket.
+        if (!isStorableLanguageCode(languageCode)) {
+          return { ok: true, ignored: "language-not-identified" };
+        }
         const dateKey = localDateKey(message.timestamp || Date.now());
         const record = ensureRecord(state, dateKey, site, languageCode);
 
@@ -2499,7 +2805,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       let removedActive = 0;
       let removedPassive = 0;
       for (const [dateKey, contribution] of Object.entries(session.byDate || {})) {
-        const languageCode = normalizeLanguageCode(session.languageCode || "ja");
+        // Must resolve to the same bucket applySessionContribution wrote to,
+        // otherwise a rollback subtracts from the wrong language.
+        const languageCode = sessionLanguageCode(state, session.languageCode);
         const record = state.languageRecords?.[languageCode]?.[dateKey] ||
           (languageCode === "ja" ? state.records?.[dateKey] : null);
         if (!record) continue;
@@ -2614,7 +2922,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           mode: "chrome-storage-sync",
           deviceId,
           lastSyncedAt: state.sync.lastSyncedAt || 0,
-          pendingMonths: Object.keys(state.sync.dirtyMonths || {}).length
+          pendingMonths: Object.keys(state.sync.dirtyMonths || {}).length,
+          lastError: state.sync.lastError || ""
         },
         storageHealth: { writeError: lastStorageWriteError }
       };
@@ -2692,13 +3001,16 @@ chrome.commands.onCommand.addListener(async (command) => {
           source: normalizeManualSource(latest.preferences.lastManualSource),
           action: "",
           mode: normalizeManualMode(latest.preferences.lastManualMode),
-          languageCode: normalizeLanguageCode(latest.preferences.targetLanguage.code),
+          languageCode: manualLanguageCode(latest),
           running: true,
           startedAt: now,
           lastCheckpointAt: now,
           committedSeconds: 0
         };
       });
+      // Without this the shortcut-started timer shows no badge until the
+      // one-minute checkpoint alarm fires.
+      await refreshManualTimerBadge();
     }
     return;
   }

@@ -241,9 +241,16 @@ function renderCurrent(current, activeTab) {
     : needsReconnect
       ? "Reload this playback tab once after installing or updating the extension."
       : "Play a supported video and your active or passive time will appear here.";
-  document.getElementById("currentLanguageHint").textContent = target.name;
-  confirmButton.textContent = "Count as " + target.name;
-  rejectButton.textContent = "Not " + target.name;
+  // In Automatic mode the chip keeps the mode visible and names what it landed
+  // on: "Automatic (English)". Without the mode you cannot tell an identified
+  // language from one you picked yourself.
+  const detectedName = target.code === "auto" ? current?.detectedLanguage?.name || "" : "";
+  const liveLanguage = detectedName ? { code: current.detectedLanguage.code, name: detectedName } : target;
+  document.getElementById("currentLanguageHint").textContent = detectedName
+    ? "Automatic (" + detectedName + ")"
+    : target.name;
+  confirmButton.textContent = target.code === "auto" ? "Count this video" : "Count as " + liveLanguage.name;
+  rejectButton.textContent = target.code === "auto" ? "Don't count this" : "Not " + liveLanguage.name;
 
   confirmButton.classList.add("hidden");
   rejectButton.classList.add("hidden");
@@ -302,13 +309,18 @@ function renderManualTimer(timer, preferences, current) {
   const action = String(timer?.action || "").trim();
   const target = preferences?.targetLanguage || { code: "ja", name: "Japanese" };
   const timerLanguage = timer?.languageCode || target.code;
-  const timerLanguageName = timerLanguage === target.code ? target.name : timerLanguage.toUpperCase();
+  // In Automatic mode the timer carries a real language the target never
+  // matches, so fall back to the stored display name before shouting "EN".
+  const timerLanguageName = timerLanguage === target.code
+    ? target.name
+    : preferences?.languageNames?.[timerLanguage] || timerLanguage.toUpperCase();
   const languageDeferred = preferences?.targetLanguageDeferred === true || target.code === "und";
   const sourceInput = document.getElementById("manualSource");
   const actionInput = document.getElementById("manualAction");
   const modeInput = document.getElementById("manualMode");
   const startButton = document.getElementById("startManualButton");
   const pauseButton = document.getElementById("pauseManualButton");
+  const saveProgressButton = document.getElementById("saveManualProgressButton");
   const timerPill = document.getElementById("manualTimerPill");
 
   if (!manualFieldsInitialized || running) {
@@ -324,6 +336,7 @@ function renderManualTimer(timer, preferences, current) {
   startButton.classList.toggle("hidden", running);
   startButton.disabled = languageDeferred;
   pauseButton.classList.toggle("hidden", !running);
+  saveProgressButton.classList.toggle("hidden", !running);
   timerPill.className = "pill " + (running ? mode : "stopped");
   timerPill.textContent = running ? capitalize(mode) : "Stopped";
   document.getElementById("manualTimerLabel").textContent = languageDeferred && !running
@@ -432,7 +445,9 @@ function renderTotals(state) {
   const records = state.records || {};
   const timer = state.manualTimer;
   const targetCode = state.preferences?.targetLanguage?.code || "ja";
-  const timerMatchesTarget = !timer?.languageCode ? targetCode === "ja" : timer.languageCode === targetCode;
+  // Automatic mode's totals span every language, so any running timer counts.
+  const timerMatchesTarget = targetCode === "auto" ||
+    (!timer?.languageCode ? targetCode === "ja" : timer.languageCode === targetCode);
   const extra = timerMatchesTarget ? manualUncommitted(timer) : 0;
   const storedToday = records[localDateKey()] || { active: 0, passive: 0, sites: {} };
   const today = {
@@ -649,7 +664,12 @@ function sessionTotals(session) {
 
 function renderHistory(state) {
   const code = state.preferences?.targetLanguage?.code || "ja";
-  const sessions = Object.entries(state.sessions || {}).filter(([, session]) => (session.languageCode || "ja") === code).sort((a, b) => (Number(b[1].lastAt) || 0) - (Number(a[1].lastAt) || 0)).slice(0, state.preferences?.historyLimit === 10 ? 10 : 5);
+  // Automatic is a mode, not a language: it shows every language's history.
+  // A session saved before language support belongs to the current target
+  // language, which is also where background.js books its time.
+  const sessions = Object.entries(state.sessions || {}).filter(([, session]) =>
+    code === "auto" || (session.languageCode || code) === code
+  ).sort((a, b) => (Number(b[1].lastAt) || 0) - (Number(a[1].lastAt) || 0)).slice(0, state.preferences?.historyLimit === 10 ? 10 : 5);
   document.getElementById("undoDeleteButton").classList.toggle("hidden", !state.lastDeletedSession);
   document.getElementById("historyList").innerHTML = sessions.length ? sessions.map(([id, session]) => {
     const totals = sessionTotals(session);
@@ -673,7 +693,10 @@ async function render() {
   let current = null;
   [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const rawCurrent = activeTab ? state.currentStatus?.[String(activeTab.id)] : null;
+  // Automatic mode accepts whatever the page turned out to be: the status
+  // reports the identified language ("en"), which will never equal "auto".
   const currentMatchesTarget = rawCurrent && (
+    target.code === "auto" ||
     rawCurrent.languageCode === target.code ||
     (!rawCurrent.languageCode && target.code === "ja")
   );
@@ -720,7 +743,9 @@ async function render() {
 
   const sync = dashboard.sync || {};
   const syncStatus = document.getElementById("syncStatus");
-  if (sync.pendingMonths > 0) {
+  if (sync.lastError) {
+    syncStatus.textContent = "Chrome Sync: could not save. " + sync.lastError;
+  } else if (sync.pendingMonths > 0) {
     syncStatus.textContent = "Chrome Sync: " + sync.pendingMonths + " update" + (sync.pendingMonths === 1 ? "" : "s") + " pending";
   } else if (sync.lastSyncedAt) {
     const time = new Date(sync.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -1157,6 +1182,17 @@ document.getElementById("pauseManualButton").addEventListener("click", async () 
   await render();
 });
 
+document.getElementById("saveManualProgressButton").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  const response = await sendRuntimeMessage({ type: "saveManualTimerProgress" });
+  await render();
+  button.disabled = false;
+  document.getElementById("manualStatus").textContent = response?.ok
+    ? "Progress saved. The timer is still running."
+    : "Could not save the timer's progress.";
+});
+
 document.getElementById("customImmersionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const action = document.getElementById("customAction").value.trim();
@@ -1378,8 +1414,10 @@ document.getElementById("syncButton").addEventListener("click", async () => {
   const response = await sendRuntimeMessage({ type: "syncNow" });
   await render();
   if (!response?.ok) {
+    // Name the limit Chrome actually hit rather than listing every possibility.
     document.getElementById("syncStatus").textContent =
-      "Chrome Sync: could not save. Check your Chrome Sync connection or storage quota.";
+      "Chrome Sync: could not save. " +
+      (response?.message || "Chrome Sync did not respond.");
   }
   button.disabled = false;
   button.textContent = "Sync now";

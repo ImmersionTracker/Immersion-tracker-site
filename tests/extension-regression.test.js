@@ -221,6 +221,226 @@ function testSourceScoreUnits() {
   assert(popup.includes("Chrome Sync: could not save."), "manual Sync failures need visible feedback");
 }
 
+function testMismatchEvidenceNamesTheLanguage() {
+  const namesStart = content.indexOf("  const LANGUAGE_NAMES");
+  const namesEnd = content.indexOf("  function normalizeLanguageCode", namesStart);
+  const helperStart = content.indexOf("  function namedOtherLanguage");
+  const helperEnd = content.indexOf("  function findPrimaryOtherLanguageEvidence", helperStart);
+  assert(helperStart >= 0 && helperEnd > helperStart, "namedOtherLanguage must exist in content.js");
+
+  const named = new Function(`
+    ${content.slice(namesStart, namesEnd)}
+    function normalizeLanguageCode(value) { return String(value || "").trim().toLowerCase().replace(/_/g, "-"); }
+    function languageFromCode(value) {
+      const code = normalizeLanguageCode(value).split("-")[0];
+      return LANGUAGE_NAMES[code] ? { code, name: LANGUAGE_NAMES[code] } : null;
+    }
+    ${content.slice(helperStart, helperEnd)}
+    return namedOtherLanguage;
+  `)();
+
+  assert.equal(named("es"), "Spanish", "a known code must resolve to its language name");
+  assert.equal(named("pt-BR"), "Portuguese", "a regional code must resolve through its base language");
+  assert.equal(named("qq", "Klingon (auto-generated)"), "Klingon",
+    "an unknown code must fall back to the track label with the auto-generated suffix stripped");
+  assert.equal(named("qq"), "QQ", "an unknown code with no label must still be shown rather than hidden");
+  assert.equal(named(""), "", "no evidence must produce no name, so the caller keeps the vague wording");
+
+  assert(content.includes('"YouTube\'s automatic captions identify the spoken language as "'),
+    "the caption mismatch message must name the detected language");
+  assert(content.includes('"YouTube reports " + hintName + " as the primary audio language, not "'),
+    "the audio-hint mismatch message must name the detected language");
+  // The vague wording may survive only as the branch taken when nothing is named.
+  const evidence = content.slice(
+    content.indexOf("  function findPrimaryOtherLanguageEvidence"),
+    content.indexOf("  function targetScriptPattern")
+  );
+  assert(/captionName\s*\?[\s\S]*?:\s*"YouTube's automatic captions identify another spoken language\."/.test(evidence),
+    "the unnamed caption wording must be the fallback branch, not the only message");
+  assert(/hintName\s*\?[\s\S]*?:\s*"YouTube reports another language as the primary audio language\."/.test(evidence),
+    "the unnamed audio wording must be the fallback branch, not the only message");
+}
+
+function testManualTimerProgressAndIndicator() {
+  assert(background.includes('message.type === "saveManualTimerProgress"'),
+    "a long manual session must be bankable without stopping the timer");
+  const save = background.slice(
+    background.indexOf('if (message.type === "saveManualTimerProgress")'),
+    background.indexOf('if (message.type === "pauseManualTimer")')
+  );
+  assert(save.includes("checkpointManualTimer()") && !save.includes("stop: true"),
+    "saving progress must checkpoint without stopping the timer");
+  assert(popupHtml.includes('id="saveManualProgressButton"'), "the popup needs a Save progress control");
+  assert(popup.includes('sendRuntimeMessage({ type: "saveManualTimerProgress" })'),
+    "the Save progress control must be wired to the background");
+  assert(popup.includes('saveProgressButton.classList.toggle("hidden", !running)'),
+    "Save progress is only meaningful while the timer runs");
+
+  // A running timer needs to be visible from outside the popup.
+  assert(background.includes("async function setManualTimerBadge"),
+    "a running manual timer needs a toolbar badge, like the automatic A/P badge");
+  const badge = background.slice(
+    background.indexOf("async function setManualTimerBadge"),
+    background.indexOf("async function refreshTabContext")
+  );
+  assert(badge.includes('chrome.action.setBadgeText({ text: "M" })'),
+    "the manual badge must be distinguishable from the A/P badge");
+  assert(!badge.includes("tabId"),
+    "the manual timer is global, so its badge must not be scoped to one tab");
+  assert(badge.includes('chrome.action.setBadgeText({ text: "" })'),
+    "stopping the timer must clear the badge");
+  assert(background.includes("refreshManualTimerBadge().catch(() => null);"),
+    "the badge must be re-asserted when the service worker restarts");
+  assert(/checkpointManualTimer\([^)]*\)[\s\S]{0,120}setManualTimerBadge/.test(background),
+    "every checkpoint must keep the badge's elapsed time honest");
+}
+
+function testAutomaticModeBooksTheDetectedLanguage() {
+  // "auto" is a mode, not a bucket. Nothing may ever be filed under it.
+  assert(background.includes("function isStorableLanguageCode"),
+    "background must have one rule for what counts as a real storage language");
+  const guard = new Function("normalizeLanguageCode", `
+    ${background.slice(background.indexOf("function isStorableLanguageCode"), background.indexOf("function normalizeStoredAutomaticLanguageMap"))}
+    return isStorableLanguageCode;
+  `)((value) => String(value || "").trim().toLowerCase());
+  assert.equal(guard("auto"), false, '"auto" must never be a storage bucket');
+  assert.equal(guard("und"), false, "an undecided language must never be a storage bucket");
+  assert.equal(guard(""), false, "an empty code must never be a storage bucket");
+  assert.equal(guard("en"), true, "a real language must be storable");
+
+  const tickStart = background.indexOf('if (message.type === "addTick")');
+  const tickEnd = background.indexOf('if (message.type === "status")', tickStart);
+  const tick = background.slice(tickStart, tickEnd > tickStart ? tickEnd : tickStart + 4000);
+  assert(tick.includes("if (!isStorableLanguageCode(languageCode))") &&
+    tick.includes('ignored: "language-not-identified"'),
+    "addTick must hold time rather than create an \"auto\" bucket");
+  assert(tick.indexOf("isStorableLanguageCode(languageCode)") < tick.indexOf("ensureRecord(state, dateKey, site, languageCode)"),
+    "the guard must run before the record bucket is created");
+
+  // The content script must send what it identified, not the mode name.
+  assert(content.includes("const tickLanguageCode = activeLanguage().code;"),
+    "ticks must carry the identified language, not targetLanguage.code");
+  assert(content.includes("languageCode: activeLanguage().code,") &&
+    content.includes("languageName: activeLanguage().name,"),
+    "the status message must report the language time is actually booked under");
+
+  assert(content.includes("function identifyPageLanguage"),
+    "Automatic mode needs an identify-what-this-is path, not only a compare-to-target one");
+  const identify = content.slice(
+    content.indexOf("  function identifyPageLanguage"),
+    content.indexOf("  function detectTargetLanguage")
+  );
+  for (const source of ["selectedAudioLabels()", "pageProbe.audioTracks", "pageProbe.hints", "pageProbe.captions", "languageFromScript"]) {
+    assert(identify.includes(source), `identifyPageLanguage must consider ${source}`);
+  }
+  assert(identify.indexOf("selectedAudioLabels()") < identify.indexOf("pageProbe.captions"),
+    "the selected audio track must outrank captions as evidence");
+  assert(!/transcri|audioContext|MediaRecorder|fetch\(/.test(identify),
+    "identification must stay on player metadata and never touch audio or the network");
+
+  // Automatic mode must not fall through to the target-comparison flow.
+  const resolve = content.slice(
+    content.indexOf("  async function resolveLanguage"),
+    content.indexOf("  async function monitorStreamingAudioLanguage")
+  );
+  assert(resolve.includes("if (isAutomaticLanguageMode()) {") &&
+    resolve.indexOf("isAutomaticLanguageMode()") < resolve.indexOf("detectTargetLanguage(info)"),
+    "Automatic mode must resolve before the target-based detection runs");
+  assert(resolve.indexOf("isAutomaticLanguageMode()") < resolve.indexOf("overlayPreferences.fullyManualEnabled"),
+    "Automatic mode must outrank fully manual counting, which cannot supply a language");
+
+  // A remembered answer, then detection, then the prompt.
+  const automatic = content.slice(
+    content.indexOf("  async function resolveAutomaticLanguage"),
+    content.indexOf("  async function resolveLanguage")
+  );
+  assert(automatic.indexOf('type: "getAutomaticLanguageChoice"') < automatic.indexOf("identifyPageLanguage(info)"),
+    "a remembered answer must win over fresh detection");
+  assert(automatic.indexOf('type: "getDecision"') < automatic.indexOf('type: "getAutomaticLanguageChoice"'),
+    '"don\'t count this video" must outrank a language remembered for the same video');
+  assert(automatic.includes("const run = ++automaticResolutionSequence;") && automatic.includes("if (stale()) return;"),
+    "a resolver that loses the race must not overwrite the user's answer");
+  assert(automatic.indexOf('languageChoices = ranking;') < automatic.indexOf('languageState = "awaiting-language"'),
+    "the dropdown's options must exist before the state that renders them");
+
+  // retryDetection runs every second; re-resolving would rebuild the picker.
+  const retry = content.slice(content.indexOf("  function retryDetection"), content.indexOf("  function confirmAutomaticLanguage"));
+  assert(retry.includes('if (languageState === "awaiting-language") {') &&
+    retry.indexOf('languageState === "awaiting-language"') < retry.indexOf("resolveAutomaticLanguage(currentInfo)"),
+    "an open language picker must not be rebuilt by the one-second retry loop");
+
+  // A declined video must stay declined when the audio track changes.
+  const monitor = content.slice(
+    content.indexOf("  async function monitorStreamingAudioLanguage"),
+    content.indexOf("  function isYouTubeAdPlaying")
+  );
+  assert(monitor.includes('if (!["confirmed", "checking"].includes(languageState)) return;'),
+    "an audio-track change must not resurrect a video the user declined");
+
+  // Legacy "auto" data must stay visible in the one view that means "all of it".
+  assert(background.includes('if (!isStorableLanguageCode(code) && normalizeLanguageCode(code) !== "auto") continue;'),
+    "time already recorded in the legacy auto bucket must not vanish from combined totals");
+  assert(background.includes("function sessionLanguageCode"),
+    "a session must be rolled back from the same bucket it was written to");
+  assert(background.includes("function strictLanguageCode"),
+    'manualLanguageCode needs a normalizer that can say "no code", since normalizeLanguageCode answers "ja"');
+  const strict = new Function(`${background.slice(background.indexOf("function strictLanguageCode"), background.indexOf("function normalizeTargetLanguage"))}\nreturn strictLanguageCode;`)();
+  assert.equal(strict(undefined), "", "a missing code must not silently become Japanese");
+  assert.equal(strict("!!"), "", "an unparseable code must not silently become Japanese");
+  assert.equal(strict("auto"), "auto", "the mode name must survive so legacy buckets stay addressable");
+  assert.equal(strict("pt-BR"), "pt-br", "a real code must pass through");
+  assert(automatic.indexOf("identifyPageLanguage(info)") < automatic.indexOf('languageState = "awaiting-language"'),
+    "the user is only asked once detection has failed");
+  assert(automatic.includes('type: "getLanguageRanking"'),
+    "the prompt must offer languages ranked by what the user actually immerses in");
+
+  assert(content.includes('["checking", "awaiting", "awaiting-language"].includes(languageState)'),
+    "time must be held while the Automatic-mode prompt is unanswered");
+
+  // The popup filters live status by language, which "auto" can never match.
+  assert(popup.includes('target.code === "auto" ||\n    rawCurrent.languageCode === target.code'),
+    "Automatic mode must accept the live status of whatever language was identified");
+  assert(popup.includes('"Automatic (" + detectedName + ")"'),
+    "the chip must keep the mode visible alongside the identified language");
+  assert(background.includes('message.type === "getLanguageRanking"') &&
+    background.includes('message.type === "saveAutomaticLanguageChoice"') &&
+    background.includes('message.type === "getAutomaticLanguageChoice"'),
+    "the background must serve the ranking and remember the user's answer");
+}
+
+function testSyncFailureNamesTheLimit() {
+  const start = background.indexOf("function formatSyncBytes");
+  const end = background.indexOf("async function flushDirtyMonths", start);
+  assert(start >= 0 && end > start, "describeSyncFailure must exist in background.js");
+  const describe = new Function(
+    "chrome",
+    background.slice(start, end) + "\nreturn describeSyncFailure;"
+  )({ runtime: {} });
+
+  const payload = { "jitRecordV2:device:2026-07": { blob: "x".repeat(9000) } };
+  const perItem = describe(new Error("QUOTA_BYTES_PER_ITEM quota exceeded"), payload);
+  assert(/8KB per-item/.test(perItem) && /jitRecordV2:device:2026-07/.test(perItem),
+    "a per-item overflow must name the limit and the oversized entry, got: " + perItem);
+  assert(/8\.8KB|8\.9KB|9(\.\d)?KB/.test(perItem), "the oversized entry's size should be reported, got: " + perItem);
+
+  assert(/100KB/.test(describe(new Error("QUOTA_BYTES quota exceeded"), {})),
+    "a total-quota overflow must name the 100KB limit");
+  assert(/120/.test(describe(new Error("MAX_WRITE_OPERATIONS_PER_MINUTE quota exceeded"), {})),
+    "a per-minute write cap must name the 120/min limit");
+  assert(/1800/.test(describe(new Error("MAX_WRITE_OPERATIONS_PER_HOUR quota exceeded"), {})),
+    "a per-hour write cap must name the 1800/hour limit");
+  assert(/512/.test(describe(new Error("MAX_ITEMS quota exceeded"), {})),
+    "an item-count overflow must name the 512-item limit");
+  assert(/refused the write: Kaboom/.test(describe(new Error("Kaboom"), {})),
+    "an unrecognised failure must still pass Chrome's own message through");
+
+  assert(!/} catch \{\s*return \{ ok: false, synced: 0, reason: "chrome-sync-unavailable" \};/.test(background),
+    "flushDirtyMonths must not swallow the sync error again");
+  assert(background.includes("latest.sync.lastError = message.slice(0, 180)"),
+    "a failed flush must record the reason so the popup can show it without a manual retry");
+  assert(popup.includes("sync.lastError"), "the popup must render a stored sync failure");
+}
+
 async function testStorageWriteFailureRecovery() {
   const start = background.indexOf("function updateState");
   const end = background.indexOf("dataReady = initializeCanonicalData", start);
@@ -322,7 +542,9 @@ function testFullyManualAndGoalPreferences() {
   assert(resolveSource.indexOf("overlayPreferences.fullyManualEnabled") < resolveSource.indexOf("detectTargetLanguage(info)") &&
     resolveSource.indexOf("overlayPreferences.fullyManualEnabled") < resolveSource.indexOf('type: "getDecision"'),
     "fully manual mode must bypass both automatic detection and remembered decisions");
-  assert(content.includes("overlayPreferences.fullyManualEnabled ||\n      !isStreamingSite") &&
+  // Automatic mode is the one exception: it has no target language to hold
+  // fixed, so a mid-title audio switch must still move time to the new language.
+  assert(content.includes("(overlayPreferences.fullyManualEnabled && !isAutomaticLanguageMode()) ||\n      !isStreamingSite") &&
     content.includes('${overlayPreferences.fullyManualEnabled ? "" : `<button class="danger" data-action="wrong">'),
     "fully manual mode must ignore later audio changes and suppress contradictory correction UI");
   assert(popup.includes("if (!fullyManualEnabled)") && popup.includes("rejectButton.classList.add(\"hidden\")"),
@@ -872,6 +1094,10 @@ testBackdatedQuickAdd();
 testPermanentDailyBreakdownsAndStorageUsage();
 testManualMidnightSegments();
 testSourceScoreUnits();
+testSyncFailureNamesTheLimit();
+testMismatchEvidenceNamesTheLanguage();
+testAutomaticModeBooksTheDetectedLanguage();
+testManualTimerProgressAndIndicator();
 testOptionalGoalPeriodButtons();
 testFullyManualAndGoalPreferences();
 testDashboardAccess();

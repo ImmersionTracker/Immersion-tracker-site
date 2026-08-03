@@ -213,10 +213,12 @@ function renderStats(state) {
     const active = Number(record.active) || 0;
     const passive = Number(record.passive) || 0;
     const combined = active + passive;
-    const height = Math.min(190, combined / goalSeconds * 180);
+    // A share of the plot row, so the bar can never grow into the label rows.
+    // 100% is the goal line the axis labels, so an over-goal day stops there.
+    const height = Math.min(100, combined / goalSeconds * 100);
     const activeShare = combined ? active / combined * 100 : 0;
     const passiveShare = combined ? passive / combined * 100 : 0;
-    return `<div class="bar-day"><b>${formatDuration(combined)}</b><div class="bar-stack" title="Active ${formatDuration(active)}, passive ${formatDuration(passive)}" style="height:${height}px"><i class="a" style="height:${activeShare}%"></i><i class="p" style="height:${passiveShare}%"></i></div><span>${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][index]}</span></div>`;
+    return `<div class="bar-day"><b>${formatDuration(combined)}</b><div class="bar-stack" title="Active ${formatDuration(active)}, passive ${formatDuration(passive)}" style="height:${height}%"><i class="a" style="height:${activeShare}%"></i><i class="p" style="height:${passiveShare}%"></i></div><span>${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][index]}</span></div>`;
   }).join("");
   weeklyBars.innerHTML = weeklyBarMarkup + (week === 0
     ? '<div class="chart-empty-state" role="status"><span>Your week starts with one focused session</span></div>'

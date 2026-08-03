@@ -18,6 +18,8 @@ The extension also handles information entered directly by the user, including t
 
 If **Fully manual counting** is enabled, eligible playback on supported video pages is counted toward the selected target language without checking or remembering that video's language. The normal playback, sound, focus, idle, and active/passive rules still apply.
 
+If **Automatic** is selected instead of a specific target language, the extension identifies the spoken language of each video from the audio-language and caption metadata the player already exposes, and records the time under the language it identifies. It does not capture, transcribe, or analyse audio to do this. When the player exposes nothing usable, the extension asks the user which language to count the video as, and remembers that answer for the exact video or the channel using the same opaque hashed identifiers described under **Data control and retention**.
+
 The extension does not capture or transcribe audio, read passwords or payment information, access cookies, or inspect pages outside the supported video services listed in its manifest.
 
 ## How information is used
@@ -26,7 +28,7 @@ The information is used only to:
 
 - determine whether eligible target-language playback should be recorded;
 - calculate immersion totals, goals, streaks, history, and notifications;
-- remember user-approved language decisions for exact videos, channels, and explicitly approved related-content groups;
+- remember user-approved language decisions for exact videos, channels, and explicitly approved related-content groups, including which language the user chose to count a video as in Automatic mode;
 - synchronize supported tracker data between the user's Chrome installations when Chrome Sync is enabled;
 - synchronize the same privacy-minimal daily-totals data to the user's own account when the user chooses to create an account and turn on cloud sync (see below); and
 - provide user-requested JSON and CSV backup import and export.
@@ -55,7 +57,7 @@ If turned on, events are sent to a dedicated table in the same Supabase project 
 
 ## Data control and retention
 
-Daily active/passive totals, their dates, and source breakdowns remain on the device until the user edits them, uses **Reset all data**, or removes the extension. These daily records contain only date, language, general source, active time, passive time, and session count—not titles or URLs. Readable video, channel, and manual-action titles are limited to the latest ten History entries, regardless of their age; older readable sessions are removed. Remembered exact-video, channel, and related-content language choices use opaque hashed identifiers rather than readable titles. Unconfirmed playback time exists only in memory while a language question is awaiting an answer and is discarded if the user rejects it or leaves the video. Cumulative source totals contain only general sources such as YouTube, Netflix, reading, or listening. Users can export their data as JSON or CSV. To ensure synchronized copies (Chrome Sync and, if used, cloud sync) are cleared, users should use **Reset all data** before uninstalling the extension.
+Daily active/passive totals, their dates, and source breakdowns remain on the device until the user edits them, uses **Reset all data**, or removes the extension. These daily records contain only date, language, general source, active time, passive time, and session count—not titles or URLs. Readable video, channel, and manual-action titles are limited to the latest ten History entries, regardless of their age; older readable sessions are removed. Remembered exact-video, channel, and related-content language choices use opaque hashed identifiers rather than readable titles, including the answers given to Automatic mode's language question, which store only the hashed identifier and the chosen language. Unconfirmed playback time exists only in memory while a language question is awaiting an answer and is discarded if the user rejects it or leaves the video. Cumulative source totals contain only general sources such as YouTube, Netflix, reading, or listening. Users can export their data as JSON or CSV. To ensure synchronized copies (Chrome Sync and, if used, cloud sync) are cleared, users should use **Reset all data** before uninstalling the extension.
 
 The extension's popup and dashboard include an optional "Donate" link to the developer's PayPal.me page. Following it opens PayPal in a new tab; the extension does not send any tracker data to PayPal, and use of that site is subject to PayPal's own privacy policy.
 

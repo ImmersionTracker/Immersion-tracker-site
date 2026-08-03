@@ -142,13 +142,26 @@ h2 { margin: 4px 0 0; font-size: 15px; line-height: 1.25; }
 .green { background: var(--green); }.orange { background: var(--orange); }.blue { background: var(--blue); }.purple { background: var(--purple); }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(245px, .72fr); grid-template-rows: 274px 260px; gap: 12px; }
-.chart { display: flex; height: 210px; min-width: 0; padding-top: 15px; }
-.axis { display: flex; flex: 0 0 auto; flex-direction: column; justify-content: space-between; padding-bottom: 23px; color: var(--muted); font-size: 8px; }
-.bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: end; gap: clamp(7px, 2vw, 20px); min-width: 0; flex: 1; margin-left: 13px; border-bottom: 1px solid var(--border); background: repeating-linear-gradient(to bottom, transparent 0 57px, color-mix(in srgb, var(--border) 55%, transparent) 58px); }
-.bar-day { display: flex; height: 100%; min-width: 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; }
-.bar-stack { display: flex; width: min(28px, 72%); min-height: 2px; flex-direction: column; justify-content: flex-end; overflow: hidden; border-radius: 5px 5px 2px 2px; background: var(--surface-3); }
+/* The chart's height is fixed, so the plot has to be whatever is left after the
+   value and day labels — not a fixed 180px bar scale that silently overran them.
+   The labels use --dashboard-caption-size (up to 13px), so at a full-goal day the
+   old scale needed ~222px inside a 195px box and the labels were cut off. Every
+   measurement below derives from --chart-label-block, which is why the axis
+   ticks, the gridlines and the bar tops all land on the same lines. */
+.chart {
+  --chart-label-line: calc(var(--dashboard-caption-size) * 1.25);
+  --chart-label-gap: 5px;
+  --chart-label-block: calc(var(--chart-label-line) + var(--chart-label-gap));
+  --chart-gridline: color-mix(in srgb, var(--border) 55%, transparent);
+  display: flex; height: 210px; min-width: 0; padding-top: 15px;
+}
+/* Half a line of padding centres each tick on the line it names. */
+.axis { display: flex; flex: 0 0 auto; flex-direction: column; justify-content: space-between; padding-top: calc(var(--chart-label-block) - var(--chart-label-line) / 2); padding-bottom: calc(var(--chart-label-block) - var(--chart-label-line) / 2); color: var(--muted); font-size: 8px; line-height: var(--chart-label-line); }
+.bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 100%; align-items: stretch; gap: clamp(7px, 2vw, 20px); min-width: 0; flex: 1; margin-left: 13px; background: linear-gradient(to bottom, transparent 0 var(--chart-label-block), var(--chart-gridline) var(--chart-label-block) calc(var(--chart-label-block) + 1px), transparent calc(var(--chart-label-block) + 1px) calc(50% - .5px), var(--chart-gridline) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px) calc(100% - var(--chart-label-block)), var(--border) calc(100% - var(--chart-label-block)) calc(100% - var(--chart-label-block) + 1px), transparent calc(100% - var(--chart-label-block) + 1px)); }
+.bar-day { display: grid; height: 100%; min-width: 0; grid-template-rows: auto minmax(0, 1fr) auto; justify-items: center; align-items: end; gap: var(--chart-label-gap); }
+.bar-stack { display: flex; width: min(28px, 72%); min-height: 2px; align-self: end; flex-direction: column; justify-content: flex-end; overflow: hidden; border-radius: 5px 5px 2px 2px; background: var(--surface-3); }
 .bar-stack i { display: block; width: 100%; }.bar-stack .a { background: var(--green); }.bar-stack .p { background: var(--orange); }
-.bar-day span, .bar-day b { max-width: 100%; overflow: hidden; font-size: 7px; white-space: nowrap; text-overflow: ellipsis; }.bar-day span { color: var(--muted); }
+.bar-day span, .bar-day b { max-width: 100%; overflow: hidden; font-size: 7px; line-height: var(--chart-label-line); white-space: nowrap; text-overflow: ellipsis; }.bar-day span { color: var(--muted); }
 .goal { grid-row: span 2; }
 .donut { display: grid; place-items: center; width: 160px; height: 160px; margin: 22px auto 18px; border-radius: 50%; background: conic-gradient(var(--green) 0 53%, var(--orange) 53% 74%, var(--surface-3) 74%); }
 .donut > div, .big-donut > div, .source-donut > div { display: grid; place-items: center; width: 118px; height: 118px; border-radius: 50%; background: var(--surface); text-align: center; }
@@ -314,9 +327,11 @@ main > header { height: 56px; }
 .grid { grid-template-rows: 274px 340px; gap: 10px; }
 .bars { position: relative; }
 .bars.is-empty::after { content: none; }
-.bars .chart-empty-state { --empty-baseline-bottom: 22px; }
+/* Taken out of grid flow: as a grid item it became an eighth cell and pushed the
+   seven bars into a half-height second row. Sits on the chart's zero line. */
+.bars .chart-empty-state { position: absolute; right: 0; bottom: var(--chart-label-block); left: 0; display: grid; place-items: center; color: var(--muted); }
 .chart.is-empty .axis { visibility: hidden; }
-.chart.is-empty .bars { border-bottom-color: transparent; background: none; }
+.chart.is-empty .bars { background: none; }
 .chart.is-empty .chart-empty-state { font-size: var(--dashboard-meta-size); }
 
 .calendar {
