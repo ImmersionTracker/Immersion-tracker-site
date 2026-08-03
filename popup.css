@@ -182,9 +182,13 @@ body { height: 600px; min-height: 600px; overflow-y: auto; font-family: var(--fo
 .calendar-day.level-3 { background: linear-gradient(145deg, color-mix(in srgb, var(--caption-cyan) 67%, var(--screening-raised)), color-mix(in srgb, var(--caption-cyan) 48%, var(--screening-raised))); }
 .calendar-day.level-4 { background: linear-gradient(145deg, color-mix(in srgb, var(--caption-cyan) 86%, var(--screening-raised)), color-mix(in srgb, var(--caption-cyan) 65%, var(--screening-raised))); }
 .calendar-day.daily-complete { border-color: color-mix(in srgb, var(--goal-iris) 80%, white); background: linear-gradient(145deg, color-mix(in srgb, var(--goal-iris) 88%, white), color-mix(in srgb, var(--goal-iris) 72%, var(--surface))); color: #fff; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white); }
-.calendar-day.week-complete { box-shadow: none; }
-.calendar-day.daily-complete.week-complete { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white); }
-.calendar-day.week-complete::after { content: ""; position: absolute; right: -3px; bottom: 3px; left: -3px; z-index: 2; height: 2px; background: var(--passive); box-shadow: 0 0 5px color-mix(in srgb, var(--passive) 55%, transparent); }
+/* Weekly-goal treatment is deliberately identical to the dashboard's
+   .days .week-complete (dashboard.css). The popup had drifted to a box-shadow:none
+   plus an ::after underline, so the same streak rendered as a glow in one surface
+   and a bar in the other. popup --passive and dashboard --orange both resolve to
+   --signal-amber, so these values compute identically on both. */
+.calendar-day.week-complete { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--passive) 65%, transparent), 0 0 9px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
+.calendar-day.daily-complete.week-complete { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white), 0 0 9px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
 .calendar-day.today { border-color: transparent; outline: 2px solid var(--caption-cyan); outline-offset: -2px; }
 .calendar-legend .calendar-intensity { gap: 3px; }
 .calendar-legend .calendar-intensity i, .calendar-legend .key-goal, .calendar-legend .key-today, .calendar-legend .key-week { position: relative; width: 10px; height: 10px; flex: 0 0 auto; border-radius: 3px; }
