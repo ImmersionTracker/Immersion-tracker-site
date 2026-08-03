@@ -86,7 +86,11 @@ Track active and passive target-language immersion time from supported video pla
 
 ### Permission justifications
 
-One field per permission. All seven were checked against the source — each is genuinely used.
+One field per permission — six fields, matching the manifest.
+
+`"windows"` used to be declared and is now removed: Chrome has no such
+permission, `chrome.windows` is reached through `"tabs"`, and the dashboard
+never asked for a justification for it.
 
 **storage**
 
@@ -104,12 +108,6 @@ Preserves long-term daily totals and per-source breakdowns beyond Chrome's defau
 
 ```
 Reads the active tab's URL, active state, and muted state on the supported video services declared in the manifest, so playback can be classified as active or passive immersion. Also used to message the content script on those pages and to open the extension's own dashboard and shortcut pages when the user requests them.
-```
-
-**windows**
-
-```
-Distinguishes foreground immersion from background immersion. Window focus state is what separates active immersion (the user is watching) from passive immersion (audio continues in an unfocused window), which is the extension's core distinction.
 ```
 
 **alarms**
@@ -154,14 +152,18 @@ All executable code ships inside the extension package. The content security pol
 
 Tick these four:
 
-- **Website content** — reads video titles and player language metadata on supported services.
-- **Web browsing activity** — recognizes supported video URLs and remembers content identities.
-- **User activity** — observes playback, focus, mute, and idle state to classify time.
 - **Personally identifiable information** — only if the user creates an optional account, in which case Supabase holds their email address.
+- **User activity** — observes playback, focus, mute, and idle state to classify time.
+- **Website content** — reads video titles and player language metadata on supported services.
+- **Web history** — the History feature stores readable video and channel titles with the times they were watched, and the extension reads supported video URLs. The checkbox reads "page title and time of visit", which is literally what a History entry is.
 
 Leave unticked: health information, financial and payment information, authentication information, personal communications, location.
 
-> The PII box is a judgement call. The extension itself never stores an email — it forwards sign-in to Supabase. But an optional account does mean an email exists in a system you control, and under-disclosing is the expensive mistake here. Tick it.
+> Two judgement calls, both resolved toward disclosing.
+>
+> **PII:** the extension itself never stores an email — it forwards sign-in to Supabase. But an optional account means an email exists in a system you control.
+>
+> **Web history:** easy to talk yourself out of, since nothing leaves the device and the cloud/analytics payloads carry no titles or URLs. But the disclosure covers what the extension *collects*, not only what it uploads, and `"tabs"` alone makes Chrome warn users "Read your browsing history." Ticking it costs nothing; a reviewer noticing an undisclosed History list of watched titles and times costs a rejection.
 
 ### Data usage — certification checkboxes
 

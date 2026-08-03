@@ -13,7 +13,12 @@ assert.equal(manifest.incognito, "not_allowed", "incognito must remain disabled 
 assert.equal(manifest.content_security_policy?.extension_pages, "script-src 'self'; object-src 'self';");
 assert(!("key" in manifest), "Chrome Web Store packages must not contain a manifest key");
 
-const allowedPermissions = new Set(["storage", "unlimitedStorage", "tabs", "windows", "alarms", "idle", "notifications"]);
+// "windows" is deliberately absent: Chrome has no such permission. chrome.windows
+// is reached through "tabs", which grants the privileged Tab fields both APIs
+// share. Declaring it did nothing except put an unrecognized string in front of
+// a reviewer, and the Developer Dashboard silently skipped it when asking for
+// per-permission justifications.
+const allowedPermissions = new Set(["storage", "unlimitedStorage", "tabs", "alarms", "idle", "notifications"]);
 for (const permission of manifest.permissions || []) assert(allowedPermissions.has(permission), `review new permission before release: ${permission}`);
 for (const host of manifest.host_permissions || []) assert(host.startsWith("https://"), `host permission must use HTTPS: ${host}`);
 
