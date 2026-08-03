@@ -1,5 +1,3 @@
-# Handoff prompt — paste this into a new chat
-
 Continue work on the Language Immersion Tracker Chrome extension (the
 japanese-immersion-tracker folder). Read your memory files first — release
 state, Supabase verification history, the git sandbox quirk, and the Chrome
