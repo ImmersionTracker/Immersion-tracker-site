@@ -199,7 +199,10 @@ body { height: 600px; min-height: 600px; overflow-y: auto; font-family: var(--fo
 .calendar-legend .key-level-4 { background: color-mix(in srgb, var(--caption-cyan) 86%, var(--screening-raised)); }
 .calendar-legend .key-goal { background: color-mix(in srgb, var(--goal-iris) 76%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--goal-iris) 72%, white); }
 .calendar-legend .key-today { border: 2px solid var(--caption-cyan); background: transparent; }
-.calendar-legend .key-week::after { content: ""; position: absolute; right: 1px; bottom: 1px; left: 1px; height: 2px; background: var(--passive); }
+/* Matches dashboard.css .calendar-key .key-week: the legend swatch has to show
+   the same soft amber glow the day cells use, not the 2px underline it drew
+   before, or the key stops describing what is actually on the calendar. */
+.calendar-legend .key-week { background: color-mix(in srgb, var(--passive) 14%, var(--screening-raised)); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--passive) 65%, transparent), 0 0 6px 1px color-mix(in srgb, var(--passive) 40%, transparent); }
 .automatic-card.is-empty { position: relative; }
 .automatic-card.is-empty::after { content: ""; display: block; height: 18px; margin-top: 12px; opacity: .45; background: repeating-linear-gradient(90deg, var(--caption-cyan) 0 2px, transparent 2px 7px); mask: linear-gradient(transparent 35%, #000 35% 65%, transparent 65%); }
 .history-empty.invitation { display: grid; place-items: center; min-height: 92px; padding: 16px; border: 1px dashed var(--border); border-radius: 11px; background: var(--surface-2); text-align: center; }
