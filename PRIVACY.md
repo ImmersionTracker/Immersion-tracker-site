@@ -1,3 +1,7 @@
+---
+title: Privacy Policy for Language Immersion Tracker
+---
+
 # Privacy Policy for Language Immersion Tracker
 
 Effective date: August 3, 2026
