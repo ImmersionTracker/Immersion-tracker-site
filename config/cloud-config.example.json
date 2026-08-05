@@ -1,8 +1,0 @@
-{
-  "enabled": false,
-  "provider": "supabase",
-  "supabaseUrl": "https://YOUR_PROJECT.supabase.co",
-  "supabaseAnonKey": "YOUR_PUBLIC_ANON_KEY",
-  "authRedirectUrl": "https://YOUR_EXTENSION_ID.chromiumapp.org/supabase-auth",
-  "contractVersion": 1
-}

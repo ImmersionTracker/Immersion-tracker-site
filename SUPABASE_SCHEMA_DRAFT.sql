@@ -1,5 +1,0 @@
--- Compatibility pointer. This file is intentionally not executed.
--- The reviewed next-phase draft now lives at:
--- supabase/migrations/0001_cloud_foundation.sql
---
--- It remains disabled and is not connected to the extension.
