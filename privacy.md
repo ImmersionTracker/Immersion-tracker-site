@@ -1,7 +1,3 @@
----
-title: Privacy Policy for Language Immersion Tracker
----
-
 # Privacy Policy for Language Immersion Tracker
 
 Effective date: August 3, 2026
@@ -49,7 +45,7 @@ Signing in is never required. Local tracking, goals, history, and exports work f
 
 If the user chooses to create an account, the extension uses [Supabase](https://supabase.com) - a third-party authentication and database provider - to handle sign-in. Supabase stores the account's email address and authentication credentials; the extension itself never stores or has access to the account password beyond forwarding it to Supabase's sign-in request.
 
-Turning on cloud sync starts a one-time, three-month free trial. During that trial, the extension uploads the same privacy-minimal daily totals described in "Data control and retention" - date, language, general source category, active seconds, passive seconds, and session count - tagged with a random per-device identifier (not a hardware identifier) so totals from multiple devices can be combined. As with local storage, **no video or channel titles, URLs, search terms, subtitle or page text, or manual-entry descriptions are ever uploaded.** The device's local copy of this data remains the primary copy at all times; cloud sync only mirrors it. If the trial ends or sync is turned off, local tracking is unaffected and continues permanently - only the cloud copy stops receiving updates.
+Turning on cloud sync starts a one-time, three-month free trial. During that trial, the extension uploads the same privacy-minimal daily totals described in "Data control and retention" - date, language, general source category, active seconds, passive seconds, and session count - tagged with a random per-device identifier (not a hardware identifier) so totals from multiple devices can be combined. As with local storage, **no video or channel titles, URLs, search terms, subtitle or page text, or manual-entry descriptions are ever uploaded.** The device's local copy of this data remains the primary copy at all times; cloud sync only mirrors it. Cloud sync is currently upload-only: data is sent from this device to your account, and is not downloaded back onto your other devices. If the trial ends or sync is turned off, local tracking is unaffected and continues permanently - only the cloud copy stops receiving updates.
 
 Cloud data is protected by Supabase Row Level Security so that an account can only ever read or write its own rows; the extension never embeds a Supabase service-role key, which would bypass that protection. You can permanently delete your account and everything stored in cloud sync yourself at any time from the full dashboard's Account, Plan & Data section - this calls a database function that only ever deletes your own account (never anyone else's) and immediately removes your profile, devices, and cloud-stored daily totals along with it. Deleting your account never affects your local tracking history on the device you delete it from.
 
