@@ -1,4 +1,4 @@
-﻿# Privacy Policy for Language Immersion Tracker
+# Privacy Policy for Language Immersion Tracker
 
 Effective date: August 5, 2026
 
@@ -57,7 +57,7 @@ If turned on, events are sent to a dedicated table in the same Supabase project 
 
 ## Data control and retention
 
-Daily active/passive totals, their dates, and source breakdowns remain on the device until the user edits them, uses **Reset all data**, or removes the extension. These daily records contain only date, language, general source, active time, passive time, and session countâ€”not titles or URLs. Readable video, channel, and manual-action titles are limited to the latest ten History entries, regardless of their age; older readable sessions are removed. Remembered exact-video, channel, and related-content language choices use opaque hashed identifiers rather than readable titles, including the answers given to Automatic mode's language question, which store only the hashed identifier and the chosen language. Unconfirmed playback time exists only in memory while a language question is awaiting an answer and is discarded if the user rejects it or leaves the video. Cumulative source totals contain only general sources such as YouTube, Netflix, reading, or listening. Users can export their data as JSON or CSV. To ensure synchronized copies (Chrome Sync and, if used, cloud sync) are cleared, users should use **Reset all data** before uninstalling the extension.
+Daily active/passive totals, their dates, and source breakdowns remain on the device until the user edits them, uses **Reset all data**, or removes the extension. These daily records contain only date, language, general source, active time, passive time, and session count—not titles or URLs. Readable video, channel, and manual-action titles are limited to the latest ten History entries, regardless of their age; older readable sessions are removed. Remembered exact-video, channel, and related-content language choices use opaque hashed identifiers rather than readable titles, including the answers given to Automatic mode's language question, which store only the hashed identifier and the chosen language. Unconfirmed playback time exists only in memory while a language question is awaiting an answer and is discarded if the user rejects it or leaves the video. Cumulative source totals contain only general sources such as YouTube, Netflix, reading, or listening. Users can export their data as JSON or CSV. To ensure synchronized copies (Chrome Sync and, if used, cloud sync) are cleared, users should use **Reset all data** before uninstalling the extension.
 
 The extension's popup and dashboard include an optional "Donate" link to the developer's PayPal.me page. Following it opens PayPal in a new tab; the extension does not send any tracker data to PayPal, and use of that site is subject to PayPal's own privacy policy.
 
