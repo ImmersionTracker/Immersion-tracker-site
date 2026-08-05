@@ -1,6 +1,6 @@
 # Privacy Policy for Language Immersion Tracker
 
-Effective date: August 3, 2026
+Effective date: August 5, 2026
 
 Language Immersion Tracker records active and passive language-immersion time on supported video websites and from entries that the user adds manually. This policy explains the information the extension handles and how it is used.
 
